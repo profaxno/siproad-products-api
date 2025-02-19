@@ -133,7 +133,8 @@ export class ProductService {
           .then( (dto: ProductDto) => {
 
             // * replication data
-            const dataReplicationDto: DataReplicationDto = new DataReplicationDto([new MessageDto(SourceEnum.API_PRODUCTS, ProcessEnum.ORDERS_PRODUCT_UPDATE, JSON.stringify(dto))]);
+            const messageDto = new MessageDto(SourceEnum.API_PRODUCTS, ProcessEnum.PRODUCT_UPDATE, JSON.stringify(dto));
+            const dataReplicationDto: DataReplicationDto = new DataReplicationDto([messageDto]);
             this.replicationService.sendMessages(dataReplicationDto);
 
             const end = performance.now();
@@ -207,7 +208,8 @@ export class ProductService {
           .then( (dto: ProductDto) => {
   
             // * replication data
-            const dataReplicationDto: DataReplicationDto = new DataReplicationDto([new MessageDto(SourceEnum.API_PRODUCTS, ProcessEnum.ORDERS_PRODUCT_UPDATE, JSON.stringify(dto))]);
+            const messageDto = new MessageDto(SourceEnum.API_PRODUCTS, ProcessEnum.PRODUCT_UPDATE, JSON.stringify(dto));
+            const dataReplicationDto: DataReplicationDto = new DataReplicationDto([messageDto]);
             this.replicationService.sendMessages(dataReplicationDto);
 
             const end = performance.now();
@@ -316,7 +318,8 @@ export class ProductService {
         // * replication data
         const entity = entityList[0];
         const dto = new ProductDto(entity.company.id, entity.name, entity.cost, entity.price, entity.hasFormula, [], [], entity.id); // * map to dto
-        const dataReplicationDto: DataReplicationDto = new DataReplicationDto([new MessageDto(SourceEnum.API_PRODUCTS, ProcessEnum.ORDERS_PRODUCT_DELETE, JSON.stringify(dto))]);
+        const messageDto = new MessageDto(SourceEnum.API_PRODUCTS, ProcessEnum.PRODUCT_DELETE, JSON.stringify(dto));
+        const dataReplicationDto: DataReplicationDto = new DataReplicationDto([messageDto]);
         this.replicationService.sendMessages(dataReplicationDto);
 
         const end = performance.now();
