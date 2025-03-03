@@ -182,9 +182,9 @@ export class FormulaService {
  
   }
 
-  findOneByValue(companyId: string, value: string): Promise<FormulaDto[]> {
+  findOneById(id: string, companyId?: string): Promise<FormulaDto[]> {
     const start = performance.now();
-    const inputDto: SearchInputDto = new SearchInputDto(value);
+    const inputDto: SearchInputDto = new SearchInputDto(id);
         
     // * find element
     return this.findByParams({}, inputDto, companyId)
@@ -192,20 +192,20 @@ export class FormulaService {
     .then( (dtoList: FormulaDto[]) => {
       
       if(dtoList.length == 0){
-        const msg = `formula not found, value=${value}`;
-        this.logger.warn(`findOneByValue: ${msg}`);
+        const msg = `formula not found, id=${id}`;
+        this.logger.warn(`findOneById: ${msg}`);
         throw new NotFoundException(msg);
       }
 
       const end = performance.now();
-      this.logger.log(`findOneByValue: executed, runtime=${(end - start) / 1000} seconds`);
+      this.logger.log(`findOneById: executed, runtime=${(end - start) / 1000} seconds`);
       return dtoList;
     })
     .catch(error => {
       if(error instanceof NotFoundException)
         throw error;
 
-      this.logger.error(`findOneByValue: error`, error);
+      this.logger.error(`findOneById: error`, error);
       throw error;
     })
     
@@ -281,11 +281,12 @@ export class FormulaService {
   private findByParams(paginationDto: SearchPaginationDto, inputDto: SearchInputDto, companyId?: string): Promise<Formula[]> {
     const {page=1, limit=this.dbDefaultLimit} = paginationDto;
 
-    // * search by partial name
-    if(inputDto.search) {
-      const whereByName = { company: { id: companyId }, name: Like(`%${inputDto.search}%`), active: true };
-      const whereById   = { id: inputDto.search, active: true };
-      const where = isUUID(inputDto.search) ? whereById : whereByName;
+    // * search by id or partial value
+    const value = inputDto.search;
+    if(value) {
+      const whereById   = { id: value, active: true };
+      const whereByName = { company: { id: companyId }, name: Like(`%${value}%`), active: true };
+      const where       = isUUID(value) ? whereById : whereByName;
 
       return this.formulaRepository.find({
         take: limit,
@@ -297,7 +298,7 @@ export class FormulaService {
       })
     }
 
-    // * search by names
+    // * search by value list
     if(inputDto.searchList) {
       return this.formulaRepository.find({
         take: limit,

@@ -87,20 +87,42 @@ export class ProductController {
     })
   }
 
-  @Get('/findOneByValue/:companyId/:value')
-  findOneByValue(
+  @Get('/findOneById/:companyId/:id')
+  findOneById(@Param('id') id: string): Promise<ResponseDto> {
+    this.logger.log(`>>> findOneById: id=${id}`);
+    const start = performance.now();
+
+    return this.productService.findOneById(id)
+    .then( (dtoList: ProductDto[]) => {
+      const response = new ResponseDto(HttpStatus.OK, "executed", dtoList.length, dtoList);
+      const end = performance.now();
+      this.logger.log(`<<< findOneById: executed, runtime=${(end - start) / 1000} seconds, response=${JSON.stringify(response)}`);
+      return response;
+    })
+    .catch( (error: Error) => {
+      if(error instanceof NotFoundException)
+        return new ResponseDto(HttpStatus.NOT_FOUND, error.message, 0, []);
+
+      this.logger.error(error.stack);
+      return new ResponseDto(HttpStatus.INTERNAL_SERVER_ERROR, error.message);
+    })
+
+  }
+
+  @Get('/findByValue/:companyId/:value')
+  findByValue(
     @Param('companyId', ParseUUIDPipe) companyId: string,
     @Param('value') value: string
   ): Promise<ResponseDto> {
 
-    this.logger.log(`>>> findOneByValue: companyId=${companyId}, value=${value}`);
+    this.logger.log(`>>> findByValue: companyId=${companyId}, value=${value}`);
     const start = performance.now();
 
-    return this.productService.findOneByValue(companyId, value)
+    return this.productService.findOneById(value, companyId)
     .then( (dtoList: ProductDto[]) => {
       const response = new ResponseDto(HttpStatus.OK, "executed", dtoList.length, dtoList);
       const end = performance.now();
-      this.logger.log(`<<< findOneByValue: executed, runtime=${(end - start) / 1000} seconds, response=${JSON.stringify(response)}`);
+      this.logger.log(`<<< findByValue: executed, runtime=${(end - start) / 1000} seconds, response=${JSON.stringify(response)}`);
       return response;
     })
     .catch( (error: Error) => {

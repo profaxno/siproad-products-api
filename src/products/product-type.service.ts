@@ -168,30 +168,30 @@ export class ProductTypeService {
 
   }
 
-  findOneByValue(companyId: string, value: string): Promise<ProductTypeDto[]> {
+  findOneById(id: string, companyId?: string): Promise<ProductTypeDto[]> {
     const start = performance.now();
 
-    const inputDto: SearchInputDto = new SearchInputDto(value);
+    const inputDto: SearchInputDto = new SearchInputDto(id);
     
     return this.findByParams({}, inputDto, companyId)
     .then( (entityList: ProductType[]) => entityList.map( (entity: ProductType) => new ProductTypeDto(entity.company.id, entity.label, entity.id) ) )// * map entities to DTOs
     .then( (dtoList: ProductTypeDto[]) => {
       
       if(dtoList.length == 0){
-        const msg = `productType not found, value=${value}`;
-        this.logger.warn(`findOneByValue: ${msg}`);
+        const msg = `productType not found, id=${id}`;
+        this.logger.warn(`findOneById: ${msg}`);
         throw new NotFoundException(msg);
       }
 
       const end = performance.now();
-      this.logger.log(`findOneByValue: executed, runtime=${(end - start) / 1000} seconds`);
+      this.logger.log(`findOneById: executed, runtime=${(end - start) / 1000} seconds`);
       return dtoList;
     })
     .catch(error => {
       if(error instanceof NotFoundException)
         throw error;
 
-      this.logger.error(`findOneByValue: error`, error);
+      this.logger.error(`findOneById: error`, error);
       throw error;
     })
 
@@ -241,12 +241,12 @@ export class ProductTypeService {
   findByParams(paginationDto: SearchPaginationDto, inputDto: SearchInputDto, companyId?: string): Promise<ProductType[]> {
     const {page=1, limit=this.dbDefaultLimit} = paginationDto;
 
-    // * search by partial name
+    // * search by id or partial value
     const value = inputDto.search
     if(value) {
-      const whereByName = { company: { id: companyId}, label: Like(`%${inputDto.search}%`) };
       const whereById   = { id: value };
-      const where = isUUID(value) ? whereById : whereByName;
+      const whereByName = { company: { id: companyId}, label: Like(`%${value}%`) };
+      const where       = isUUID(value) ? whereById : whereByName;
 
       return this.productTypeRepository.find({
         take: limit,
@@ -255,7 +255,7 @@ export class ProductTypeService {
       })
     }
 
-    // * search by names
+    // * search by value list
     if(inputDto.searchList) {
       return this.productTypeRepository.find({
         take: limit,

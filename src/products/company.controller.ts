@@ -66,16 +66,16 @@ export class CompanyController {
     })
   }
 
-  @Get('/findOneByValue/:value')
-  findOneByValue(@Param('value') value: string): Promise<ResponseDto> {
-    this.logger.log(`>>> findOneByValue: value=${value}`);
+  @Get('/findOneById/:id')
+  findOneById(@Param('id') id: string): Promise<ResponseDto> {
+    this.logger.log(`>>> findOneById: id=${id}`);
     const start = performance.now();
 
-    return this.companyService.findOneByValue(value)
+    return this.companyService.findOneById(id)
     .then( (dtoList: CompanyDto[]) => {
       const response = new ResponseDto(HttpStatus.OK, "executed", dtoList.length, dtoList);
       const end = performance.now();
-      this.logger.log(`<<< findOneByValue: executed, runtime=${(end - start) / 1000} seconds, response=${JSON.stringify(response)}`);
+      this.logger.log(`<<< findOneById: executed, runtime=${(end - start) / 1000} seconds, response=${JSON.stringify(response)}`);
       return response;
     })
     .catch( (error: Error) => {
