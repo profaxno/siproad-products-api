@@ -1,7 +1,5 @@
-import { Column, Entity, ManyToOne, OneToMany, PrimaryGeneratedColumn } from "typeorm";
-import { Company } from "./company.entity";
-import { FormulaElement } from "./formula-element.entity";
-import { ProductFormula } from "./product-formula.entity";
+import { Column, CreateDateColumn, Entity, ManyToOne, OneToMany, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
+import { Company, FormulaElement, ProductFormula } from "./";
 
 @Entity("pro_formula")
 export class Formula {
@@ -9,20 +7,19 @@ export class Formula {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column('varchar', { 
-    length: 45,
-    unique: true
-  })
+  @Column('varchar', { length: 45, unique: true })
   name: string;
 
   @Column('double')
   cost: number;
 
-  // TODO: falta agregar createAt y UpdatedAt
+  @CreateDateColumn({ type: 'timestamp' })
+  createdAt: Date;
 
-  @Column('boolean', {
-    default: true
-  })
+  @UpdateDateColumn({ type: 'timestamp' })
+  updatedAt: Date;
+
+  @Column('boolean', { default: true })
   active: boolean
 
   @ManyToOne(

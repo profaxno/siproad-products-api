@@ -2,12 +2,11 @@ import { ProcessSummaryDto, SearchInputDto, SearchPaginationDto } from 'profaxno
 
 import { Controller, Get, Body, Patch, Param, Delete, Logger, HttpCode, HttpStatus, Query, ParseUUIDPipe, ParseArrayPipe, NotFoundException, Post } from '@nestjs/common';
 
-import { FormulaDto } from './dto/formula.dto';
-import { ProductsResponseDto } from './dto/products-response-dto';
+import { FormulaDto, ResponseDto } from './dto';
 import { FormulaService } from './formula.service';
-import { AlreadyExistException, IsBeingUsedException } from './exceptions/products.exception';
+import { AlreadyExistException, IsBeingUsedException } from '../common/exceptions/common.exception';
 
-@Controller('siproad-products')
+@Controller('formulas')
 export class FormulaController {
 
   private readonly logger = new Logger(FormulaController.name);
@@ -16,115 +15,124 @@ export class FormulaController {
     private readonly formulaService: FormulaService
   ) {}
 
-  @Patch('/formulas/update')
+  @Post('/updateBatch')
   @HttpCode(HttpStatus.OK)
-  updateFormula(@Body() dto: FormulaDto): Promise<ProductsResponseDto> {
-    this.logger.log(`>>> updateFormula: dto=${JSON.stringify(dto)}`);
+  updateBatch(@Body() dtoList: FormulaDto[]): Promise<ResponseDto> {
+    this.logger.log(`>>> updateBatch: listSize=${dtoList.length}`);
     const start = performance.now();
 
-    return this.formulaService.updateFormula(dto)
-    .then( (dto: FormulaDto) => {
-      const response = new ProductsResponseDto(HttpStatus.OK, 'executed', 1, [dto]);
+    return this.formulaService.updateBatch(dtoList)
+    .then( (processSummaryDto: ProcessSummaryDto) => {
+      const response = new ResponseDto(HttpStatus.OK, "executed", undefined, processSummaryDto);
       const end = performance.now();
-      this.logger.log(`<<< updateFormula: executed, runtime=${(end - start) / 1000} seconds, response=${JSON.stringify(response)}`);
+      this.logger.log(`<<< updateBatch: executed, runtime=${(end - start) / 1000} seconds, response=${JSON.stringify(response)}`);
+      return response;
+    })
+    .catch( (error: Error) => {
+      this.logger.error(error.stack);
+      return new ResponseDto(HttpStatus.INTERNAL_SERVER_ERROR, error.message);
+    })
+
+  }
+
+  @Patch('/update')
+  @HttpCode(HttpStatus.OK)
+  update(@Body() dto: FormulaDto): Promise<ResponseDto> {
+    this.logger.log(`>>> update: dto=${JSON.stringify(dto)}`);
+    const start = performance.now();
+
+    return this.formulaService.update(dto)
+    .then( (dto: FormulaDto) => {
+      const response = new ResponseDto(HttpStatus.OK, 'executed', 1, [dto]);
+      const end = performance.now();
+      this.logger.log(`<<< update: executed, runtime=${(end - start) / 1000} seconds, response=${JSON.stringify(response)}`);
       return response;
     })
     .catch( (error: Error) => {
       if(error instanceof NotFoundException)
-        return new ProductsResponseDto(HttpStatus.NOT_FOUND, error.message, 0, []);
+        return new ResponseDto(HttpStatus.NOT_FOUND, error.message, 0, []);
 
       if(error instanceof AlreadyExistException)
-        return new ProductsResponseDto(HttpStatus.BAD_REQUEST, error.message, 0, []);
+        return new ResponseDto(HttpStatus.BAD_REQUEST, error.message, 0, []);
 
       this.logger.error(error.stack);
-      return new ProductsResponseDto(HttpStatus.INTERNAL_SERVER_ERROR, error.message);
+      return new ResponseDto(HttpStatus.INTERNAL_SERVER_ERROR, error.message);
     })
   }
 
-  @Post('/formulas/updateBatch')
-  @HttpCode(HttpStatus.OK)
-  updateFormulaBatch(@Body() dtoList: FormulaDto[]): Promise<ProductsResponseDto> {
-    this.logger.log(`>>> updateFormulaBatch: listSize=${dtoList.length}`);
+  @Get('/find/:companyId')
+  find(
+    @Param('companyId', ParseUUIDPipe) companyId: string,
+    @Query() paginationDto: SearchPaginationDto,
+    @Body() inputDto: SearchInputDto
+  ): Promise<ResponseDto> {
+
+    this.logger.log(`>>> find: companyId=${companyId}, paginationDto=${JSON.stringify(paginationDto)}, inputDto=${JSON.stringify(inputDto)}`);
     const start = performance.now();
 
-    return this.formulaService.updateFormulaBatch(dtoList)
-    .then( (processSummaryDto: ProcessSummaryDto) => {
-      const response = new ProductsResponseDto(HttpStatus.OK, "executed", undefined, processSummaryDto);
-      const end = performance.now();
-      this.logger.log(`<<< updateFormulaBatch: executed, runtime=${(end - start) / 1000} seconds, response=${JSON.stringify(response)}`);
-      return response;
-    })
-    .catch( (error: Error) => {
-      this.logger.error(error.stack);
-      return new ProductsResponseDto(HttpStatus.INTERNAL_SERVER_ERROR, error.message);
-    })
-
-  }
-
-  @Get('/formulas/:companyId')
-  findFormulas(@Param('companyId', ParseUUIDPipe) companyId: string, @Query() paginationDto: SearchPaginationDto, @Body() inputDto: SearchInputDto): Promise<ProductsResponseDto> {
-    this.logger.log(`>>> findFormulas: companyId=${companyId}, paginationDto=${JSON.stringify(paginationDto)}, inputDto=${JSON.stringify(inputDto)}`);
-    const start = performance.now();
-
-    return this.formulaService.findFormulas(companyId, paginationDto, inputDto)
+    return this.formulaService.find(companyId, paginationDto, inputDto)
     .then( (dtoList: FormulaDto[]) => {
-      const response = new ProductsResponseDto(HttpStatus.OK, 'executed', dtoList.length, dtoList);
+      const response = new ResponseDto(HttpStatus.OK, 'executed', dtoList.length, dtoList);
       const end = performance.now();
-      this.logger.log(`<<< findFormulas: executed, runtime=${(end - start) / 1000} seconds, response=${JSON.stringify(response)}`);
+      this.logger.log(`<<< find: executed, runtime=${(end - start) / 1000} seconds, response=${JSON.stringify(response)}`);
       return response;
     })
     .catch( (error: Error) => {
       if(error instanceof NotFoundException)
-        return new ProductsResponseDto(HttpStatus.NOT_FOUND, error.message, 0, []);
+        return new ResponseDto(HttpStatus.NOT_FOUND, error.message, 0, []);
 
       this.logger.error(error.stack);
-      return new ProductsResponseDto(HttpStatus.INTERNAL_SERVER_ERROR, error.message);
+      return new ResponseDto(HttpStatus.INTERNAL_SERVER_ERROR, error.message);
     })
   }
 
-  @Get('/formulas/:companyId/:value')
-  findOneFormulaByValue(@Param('companyId', ParseUUIDPipe) companyId: string, @Param('value') value: string): Promise<ProductsResponseDto> {
-    this.logger.log(`>>> findOneFormulaByValue: companyId=${companyId}, value=${value}`);
+  @Get('/findOneByValue/:companyId/:value')
+  findOneByValue(
+    @Param('companyId', ParseUUIDPipe) companyId: string,
+    @Param('value') value: string
+  ): Promise<ResponseDto> {
+    
+    this.logger.log(`>>> findOneByValue: companyId=${companyId}, value=${value}`);
     const start = performance.now();
 
-    return this.formulaService.findOneFormulaByValue(companyId, value)
+    return this.formulaService.findOneByValue(companyId, value)
     .then( (dtoList: FormulaDto[]) => {
-      const response = new ProductsResponseDto(HttpStatus.OK, 'executed', dtoList.length, dtoList);
+      const response = new ResponseDto(HttpStatus.OK, 'executed', dtoList.length, dtoList);
       const end = performance.now();
-      this.logger.log(`<<< findOneFormulaByValue: executed, runtime=${(end - start) / 1000} seconds, response=${JSON.stringify(response)}`);
+      this.logger.log(`<<< findOneByValue: executed, runtime=${(end - start) / 1000} seconds, response=${JSON.stringify(response)}`);
       return response;
     })
     .catch( (error: Error) => {
       if(error instanceof NotFoundException)
-        return new ProductsResponseDto(HttpStatus.NOT_FOUND, error.message, 0, []);
+        return new ResponseDto(HttpStatus.NOT_FOUND, error.message, 0, []);
 
       this.logger.error(error.stack);
-      return new ProductsResponseDto(HttpStatus.INTERNAL_SERVER_ERROR, error.message);
+      return new ResponseDto(HttpStatus.INTERNAL_SERVER_ERROR, error.message);
     })
 
   }
 
-  @Delete('formulas/:id')
-  removeFormula(@Param('id', ParseUUIDPipe) id: string): Promise<ProductsResponseDto> {
-    this.logger.log(`>>> removeFormula: id=${id}`);
+  @Delete('/:id')
+  remove(@Param('id', ParseUUIDPipe) id: string): Promise<ResponseDto> {
+    this.logger.log(`>>> remove: id=${id}`);
     const start = performance.now();
 
-    return this.formulaService.removeFormula(id)
+    return this.formulaService.remove(id)
     .then( (msg: string) => {
-      const response = new ProductsResponseDto(HttpStatus.OK, msg);
+      const response = new ResponseDto(HttpStatus.OK, msg);
       const end = performance.now();
-      this.logger.log(`<<< removeFormula: executed, runtime=${(end - start) / 1000} seconds, response=${JSON.stringify(response)}`);
+      this.logger.log(`<<< remove: executed, runtime=${(end - start) / 1000} seconds, response=${JSON.stringify(response)}`);
       return response;
     })
     .catch( (error: Error) => {
       if(error instanceof NotFoundException)
-        return new ProductsResponseDto(HttpStatus.NOT_FOUND, error.message, 0, []);
+        return new ResponseDto(HttpStatus.NOT_FOUND, error.message, 0, []);
 
       if(error instanceof IsBeingUsedException)
-        return new ProductsResponseDto(HttpStatus.BAD_REQUEST, error.message, 0, []);
+        return new ResponseDto(HttpStatus.BAD_REQUEST, error.message, 0, []);
 
       this.logger.error(error.stack);
-      return new ProductsResponseDto(HttpStatus.INTERNAL_SERVER_ERROR, error.message);
+      return new ResponseDto(HttpStatus.INTERNAL_SERVER_ERROR, error.message);
     })
   }
   

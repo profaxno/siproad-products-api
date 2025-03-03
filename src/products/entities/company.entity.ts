@@ -1,7 +1,6 @@
-import { Column, Entity, OneToMany, PrimaryGeneratedColumn } from "typeorm";
-import { Element } from "./element.entity";
-import { Formula } from "./formula.entity";
-import { Product } from "./product.entity";
+import { Column, CreateDateColumn, Entity, OneToMany, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
+import { Element, Formula, Product } from "./";
+import { ProductType } from "./product-type.entity";
 
 @Entity("pro_company")
 export class Company {
@@ -9,17 +8,16 @@ export class Company {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column('varchar', { 
-    length: 45,
-    unique: true
-  })
+  @Column('varchar', { length: 45, unique: true })
   name: string;
 
-  // TODO: falta agregar createAt y UpdatedAt
+  @CreateDateColumn({ type: 'timestamp' })
+  createdAt: Date;
 
-  @Column('boolean', {
-    default: true
-  })
+  @UpdateDateColumn({ type: 'timestamp' })
+  updatedAt: Date;
+  
+  @Column('boolean', { default: true })
   active: boolean
 
   @OneToMany(
@@ -39,4 +37,10 @@ export class Company {
     (product) => product.company
   )
   product: Product;
+
+  @OneToMany(
+    () => ProductType,
+    (productType) => productType.company
+  )
+  productType: ProductType;
 }

@@ -1,6 +1,5 @@
 import { Column, Entity, ManyToOne, PrimaryGeneratedColumn } from "typeorm";
-import { Product } from "./product.entity";
-import { Element } from "./element.entity";
+import { Product, Element } from "./";
 
 @Entity("pro_product_element")
 export class ProductElement {

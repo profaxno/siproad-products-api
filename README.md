@@ -13,14 +13,16 @@ Api central del sistema siproad que permite gestionar elementos, productos y ord
 
 ## Configuración ambiente dev
 
-### Configuración del repo
+### Configuración de la api
 * Tener Nest CLI instalado ```npm i -g @nestjs/cli```
 * Clonar el proyecto.
 * Clonar el archivo __.env.template__ y renombrar la copia a ```.env```
 * Configurar los valores de las variables de entornos correspondientes ```.env```
 * Actualizar node_modules ```npm install```
 
-### Configuración de la base de datos (docker)
-* Instalar Docker desktop.
-* Descargar imagen mariadb.
-* Crear contenedor de base de datos y api ```docker-compose -p dev-siproad up -d```
+Nota: siproad-admin-api tiene los pasos para la creación de la base de datos en su docker-compose.
+
+## Configuración ambiente stg
+
+### Configuración de la api
+* Crear contenedor de api ```docker-compose -p siproad up -d```

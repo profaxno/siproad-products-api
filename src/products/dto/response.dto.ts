@@ -1,4 +1,4 @@
-export class ProductsResponseDto {
+export class ResponseDto {
   internalCode: number;
   message: string;
   qty?: number;

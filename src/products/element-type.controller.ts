@@ -2,26 +2,26 @@ import { ProcessSummaryDto, SearchInputDto, SearchPaginationDto } from 'profaxno
 
 import { Controller, Get, Post, Body, Patch, Param, Delete, Logger, HttpCode, HttpStatus, Query, ParseUUIDPipe, ParseArrayPipe, NotFoundException } from '@nestjs/common';
 
-import { ElementDto, ResponseDto } from './dto';
-import { ElementService } from './element.service';
+import { ElementTypeDto, ResponseDto } from './dto';
+import { ElementTypeService } from './element-type.service';
 import { AlreadyExistException, IsBeingUsedException } from '../common/exceptions/common.exception';
 
-@Controller('elements')
-export class ElementController {
+@Controller('element-types')
+export class ElementTypeController {
 
-  private readonly logger = new Logger(ElementController.name);
+  private readonly logger = new Logger(ElementTypeController.name);
 
   constructor(
-    private readonly elementService: ElementService
+    private readonly elementTypeService: ElementTypeService
   ) {}
 
   @Post('/updateBatch')
   @HttpCode(HttpStatus.OK)
-  updateBatch(@Body() dtoList: ElementDto[]): Promise<ResponseDto> {
+  updateBatch(@Body() dtoList: ElementTypeDto[]): Promise<ResponseDto> {
     this.logger.log(`>>> updateBatch: listSize=${dtoList.length}`);
     const start = performance.now();
 
-    return this.elementService.updateBatch(dtoList)
+    return this.elementTypeService.updateBatch(dtoList)
     .then( (processSummaryDto: ProcessSummaryDto) => {
       const response = new ResponseDto(HttpStatus.OK, "executed", undefined, processSummaryDto);
       const end = performance.now();
@@ -37,12 +37,12 @@ export class ElementController {
 
   @Patch('/update')
   @HttpCode(HttpStatus.OK)
-  update(@Body() dto: ElementDto): Promise<ResponseDto> {
+  update(@Body() dto: ElementTypeDto): Promise<ResponseDto> {
     this.logger.log(`>>> update: dto=${JSON.stringify(dto)}`);
     const start = performance.now();
 
-    return this.elementService.update(dto)
-    .then( (dto: ElementDto) => {
+    return this.elementTypeService.update(dto)
+    .then( (dto: ElementTypeDto) => {
       const response = new ResponseDto(HttpStatus.OK, 'executed', 1, [dto]);
       const end = performance.now();
       this.logger.log(`<<< update: executed, runtime=${(end - start) / 1000} seconds, response=${JSON.stringify(response)}`);
@@ -70,8 +70,8 @@ export class ElementController {
     this.logger.log(`>>> find: companyId=${companyId}, paginationDto=${JSON.stringify(paginationDto)}, inputDto=${JSON.stringify(inputDto)}`);
     const start = performance.now();
     
-    return this.elementService.find(companyId, paginationDto, inputDto)
-    .then( (dtoList: ElementDto[]) => {
+    return this.elementTypeService.find(companyId, paginationDto, inputDto)
+    .then( (dtoList: ElementTypeDto[]) => {
       const response = new ResponseDto(HttpStatus.OK, "executed", dtoList.length, dtoList);
       const end = performance.now();
       this.logger.log(`<<< find: executed, runtime=${(end - start) / 1000} seconds, response=${JSON.stringify(response)}`);
@@ -95,8 +95,8 @@ export class ElementController {
     this.logger.log(`>>> findOneByValue: companyId=${companyId}, value=${value}`);
     const start = performance.now();
 
-    return this.elementService.findOneByValue(companyId, value)
-    .then( (dtoList: ElementDto[]) => {
+    return this.elementTypeService.findOneByValue(companyId, value)
+    .then( (dtoList: ElementTypeDto[]) => {
       const response = new ResponseDto(HttpStatus.OK, "executed", dtoList.length, dtoList);
       const end = performance.now();
       this.logger.log(`<<< findOneByValue: executed, runtime=${(end - start) / 1000} seconds, response=${JSON.stringify(response)}`);
@@ -117,7 +117,7 @@ export class ElementController {
     this.logger.log(`>>> remove: id=${id}`);
     const start = performance.now();
 
-    return this.elementService.remove(id)
+    return this.elementTypeService.remove(id)
     .then( (msg: string) => {
       const response = new ResponseDto(HttpStatus.OK, msg);
       const end = performance.now();

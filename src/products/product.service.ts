@@ -6,22 +6,18 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 
-import { ProductDto, ProductElementDto, ProductFormulaDto } from './dto/product.dto';
-import { Product } from './entities/product.entity';
-import { ProductElement } from './entities/product-element.entity';
-
-import { Element } from './entities/element.entity';
-
-import { CompanyService } from './company.service';
-import { Company } from './entities/company.entity';
-import { ProductFormula } from './entities/product-formula.entity';
+import { ProductDto, ProductFormulaDto, ProductElementDto } from './dto/product.dto';
+import { Product, ProductFormula, Formula, ProductElement, Element, Company, ProductType } from './entities';
 
 import { FormulaService } from './formula.service';
-import { Formula } from './entities/formula.entity';
-import { AlreadyExistException, IsBeingUsedException } from './exceptions/products.exception';
-import { MessageDto, DataReplicationDto } from 'src/data-replication/dto/data-replication.dto';
+import { CompanyService } from './company.service';
+
 import { ProcessEnum, SourceEnum } from 'src/data-replication/enum';
+import { MessageDto, DataReplicationDto } from 'src/data-replication/dto/data-replication.dto';
 import { DataReplicationService } from 'src/data-replication/data-replication.service';
+
+import { AlreadyExistException, IsBeingUsedException } from '../common/exceptions/common.exception';
+import { ProductTypeService } from './product-type.service';
 
 @Injectable()
 export class ProductService {
@@ -49,6 +45,7 @@ export class ProductService {
     private readonly formulaRepository: Repository<Formula>,
 
     private readonly companyService: CompanyService,
+    private readonly productTypeService: ProductTypeService,
     private readonly formulaService: FormulaService,
     private readonly replicationService: DataReplicationService
     
@@ -56,15 +53,15 @@ export class ProductService {
     this.dbDefaultLimit = this.ConfigService.get("dbDefaultLimit");
   }
 
-  async updateProductBatch(dtoList: ProductDto[]): Promise<ProcessSummaryDto>{
-    this.logger.warn(`updateProductBatch: starting process... listSize=${dtoList.length}`);
+  async updateBatch(dtoList: ProductDto[]): Promise<ProcessSummaryDto>{
+    this.logger.warn(`updateBatch: starting process... listSize=${dtoList.length}`);
     const start = performance.now();
     
     let processResultDto: ProcessSummaryDto = new ProcessSummaryDto(dtoList.length);
     let i = 0;
     for (const dto of dtoList) {
       
-      await this.updateProduct(dto)
+      await this.update(dto)
       .then( () => {
         processResultDto.rowsOK++;
         processResultDto.detailsRowsOK.push(`(${i++}) name=${dto.name}, message=OK`);
@@ -77,149 +74,103 @@ export class ProductService {
     }
     
     const end = performance.now();
-    this.logger.log(`updateProductBatch: executed, runtime=${(end - start) / 1000} seconds`);
+    this.logger.log(`updateBatch: executed, runtime=${(end - start) / 1000} seconds`);
     return processResultDto;
   }
 
-  updateProduct(dto: ProductDto): Promise<ProductDto> {
+  update(dto: ProductDto): Promise<ProductDto> {
     if(!dto.id)
-      return this.createProduct(dto); // * create
+      return this.create(dto); // * create
     
-    this.logger.warn(`updateProduct: starting process... dto=${JSON.stringify(dto)}`);
+    this.logger.warn(`update: starting process... dto=${JSON.stringify(dto)}`);
     const start = performance.now();
 
-    // * find company
-    const inputDto: SearchInputDto = new SearchInputDto(dto.companyId);
-    
-    return this.companyService.findCompaniesByParams({}, inputDto)
-    .then( (companyList: Company[]) => {
+    // * find product
+    const inputDto: SearchInputDto = new SearchInputDto(dto.id);
+      
+    return this.findByParams({}, inputDto)
+    .then( (entityList: Product[]) => {
 
-      if(companyList.length == 0){
-        const msg = `company not found, id=${dto.companyId}`;
-        this.logger.warn(`updateProduct: not executed (${msg})`);
+      // * validate
+      if(entityList.length == 0){
+        const msg = `product not found, id=${dto.id}`;
+        this.logger.warn(`update: not executed (${msg})`);
         throw new NotFoundException(msg);
       }
 
-      const company = companyList[0];
+      // * update
+      const entity = entityList[0];
 
-      // * find product
-      const inputDto: SearchInputDto = new SearchInputDto(dto.id);
-        
-      return this.findProductsByParams({}, inputDto)
-      .then( (entityList: Product[]) => {
+      return this.prepareEntity(entity, dto) // * prepare
+      .then( (entity: Product) => this.save(entity) ) // * update
+      .then( (entity: Product) => {
 
-        // * validate
-        if(entityList.length == 0){
-          const msg = `product not found, id=${dto.id}`;
-          this.logger.warn(`updateProduct: not executed (${msg})`);
-          throw new NotFoundException(msg);
-        }
+        return (entity.hasFormula ? this.updateProductFormula(entity, dto.formulaList) : this.updateProductElement(entity, dto.elementList)) // * create productElement
+        .then( (productElementOrFormulaList: any) => (entity.hasFormula ? this.generateProductWithFormulaList(entity, productElementOrFormulaList) : this.generateProductWithElementList(entity, productElementOrFormulaList) ) ) // * generate product with productElement
+        .then( (dto: ProductDto) => {
 
-        let entity = entityList[0];
+          // * replication data
+          const messageDto = new MessageDto(SourceEnum.API_PRODUCTS, ProcessEnum.PRODUCT_UPDATE, JSON.stringify(dto));
+          const dataReplicationDto: DataReplicationDto = new DataReplicationDto([messageDto]);
+          this.replicationService.sendMessages(dataReplicationDto);
 
-        // * update
-        entity.company = company;
-        entity.name = dto.name.toUpperCase();
-        entity.description = dto.description.toUpperCase();
-        entity.cost = dto.cost;
-        entity.price = dto.price;
-        entity.hasFormula = dto.hasFormula;
-
-        return this.saveProduct(entity) // * update product
-        .then( (entity: Product) => {
-
-          return (entity.hasFormula ? this.updateProductFormula(entity, dto.formulaList) : this.updateProductElement(entity, dto.elementList)) // * create productElement
-          .then( (productElementOrFormulaList: any) => (entity.hasFormula ? this.generateProductWithFormulaList(entity, productElementOrFormulaList) : this.generateProductWithElementList(entity, productElementOrFormulaList) ) ) // * generate product with productElement
-          .then( (dto: ProductDto) => {
-
-            // * replication data
-            const messageDto = new MessageDto(SourceEnum.API_PRODUCTS, ProcessEnum.PRODUCT_UPDATE, JSON.stringify(dto));
-            const dataReplicationDto: DataReplicationDto = new DataReplicationDto([messageDto]);
-            this.replicationService.sendMessages(dataReplicationDto);
-
-            const end = performance.now();
-            this.logger.log(`updateProduct: executed, runtime=${(end - start) / 1000} seconds`);
-            return dto;
-            
-          })
-        
+          const end = performance.now();
+          this.logger.log(`update: executed, runtime=${(end - start) / 1000} seconds`);
+          return dto;
+          
         })
-        
+      
       })
-
+      
     })
     .catch(error => {
       if(error instanceof NotFoundException)
         throw error;
 
-      this.logger.error(`updateProduct: error`, error);
+      this.logger.error(`update: error`, error);
       throw error;
     })
 
   }
 
-  createProduct(dto: ProductDto): Promise<ProductDto> {
-    this.logger.warn(`createProduct: starting process... dto=${JSON.stringify(dto)}`);
+  create(dto: ProductDto): Promise<ProductDto> {
+    this.logger.warn(`create: starting process... dto=${JSON.stringify(dto)}`);
     const start = performance.now();
 
-    // * find company
-    const inputDto: SearchInputDto = new SearchInputDto(dto.companyId);
+    // * find product
+    const inputDto: SearchInputDto = new SearchInputDto(undefined, [dto.name]);
+    
+    return this.findByParams({}, inputDto, dto.companyId)
+    .then( (entityList: Product[]) => {
 
-    return this.companyService.findCompaniesByParams({}, inputDto)
-    .then( (companyList: Company[]) => {
-
-      if(companyList.length == 0){
-        const msg = `company not found, id=${dto.companyId}`;
-        this.logger.warn(`createProduct: not executed (${msg})`);
-        throw new NotFoundException(msg);
-        //return new productsResponseDto(HttpStatus.NOT_FOUND, msg);
+      // * validate
+      if(entityList.length > 0){
+        const msg = `product already exists, name=${dto.name}`;
+        this.logger.warn(`create: not executed (${msg})`);
+        throw new AlreadyExistException(msg);
       }
-
-      const company = companyList[0];
-
-      // * find product
-      const inputDto: SearchInputDto = new SearchInputDto(undefined, [dto.name]);
       
-      return this.findProductsByParams({}, inputDto, company.id)
-      .then( (entityList: Product[]) => {
-  
-        // * validate
-        if(entityList.length > 0){
-          const msg = `product already exists, name=${dto.name}`;
-          this.logger.warn(`createProduct: not executed (${msg})`);
-          throw new AlreadyExistException(msg);
-          // return new productsResponseDto(HttpStatus.BAD_REQUEST, msg);
-        }
-        
-        // * create
-        let entity = new Product();
-        entity.company = company;
-        entity.name = dto.name.toUpperCase();
-        entity.description = dto.description.toUpperCase();
-        entity.cost = dto.cost;
-        entity.price = dto.price;
-        entity.hasFormula = dto.hasFormula;
-  
-        return this.saveProduct(entity) // * create product
-        .then( (entity: Product) => {
+      // * create
+      const entity = new Product();
+      
+      return this.prepareEntity(entity, dto) // * prepare
+      .then( (entity: Product) => this.save(entity) ) // * create
+      .then( (entity: Product) => {
 
-          return (entity.hasFormula ? this.updateProductFormula(entity, dto.formulaList) : this.updateProductElement(entity, dto.elementList)) // * create productElement
-          .then( (productElementOrFormulaList: any) => (entity.hasFormula ? this.generateProductWithFormulaList(entity, productElementOrFormulaList) : this.generateProductWithElementList(entity, productElementOrFormulaList) ) ) // * generate product with productElement
-          .then( (dto: ProductDto) => {
-  
-            // * replication data
-            const messageDto = new MessageDto(SourceEnum.API_PRODUCTS, ProcessEnum.PRODUCT_UPDATE, JSON.stringify(dto));
-            const dataReplicationDto: DataReplicationDto = new DataReplicationDto([messageDto]);
-            this.replicationService.sendMessages(dataReplicationDto);
+        return (entity.hasFormula ? this.updateProductFormula(entity, dto.formulaList) : this.updateProductElement(entity, dto.elementList)) // * create productElement
+        .then( (productElementOrFormulaList: any) => (entity.hasFormula ? this.generateProductWithFormulaList(entity, productElementOrFormulaList) : this.generateProductWithElementList(entity, productElementOrFormulaList) ) ) // * generate product with productElement
+        .then( (dto: ProductDto) => {
 
-            const end = performance.now();
-            this.logger.log(`createProduct: created OK, runtime=${(end - start) / 1000} seconds`);
-            return dto;
-            //return new productsResponseDto(HttpStatus.CREATED, 'created OK', [dto]);
-          })
-  
+          // * replication data
+          const messageDto = new MessageDto(SourceEnum.API_PRODUCTS, ProcessEnum.PRODUCT_UPDATE, JSON.stringify(dto));
+          const dataReplicationDto: DataReplicationDto = new DataReplicationDto([messageDto]);
+          this.replicationService.sendMessages(dataReplicationDto);
+
+          const end = performance.now();
+          this.logger.log(`create: created OK, runtime=${(end - start) / 1000} seconds`);
+          return dto;
         })
-  
+
       })
 
     })
@@ -227,88 +178,111 @@ export class ProductService {
       if(error instanceof NotFoundException || error instanceof AlreadyExistException)
         throw error;
 
-      this.logger.error(`createProduct: error`, error);
+      this.logger.error(`create: error`, error);
       throw error;
     })
     
   }
 
-  findProducts(companyId: string, paginationDto: SearchPaginationDto, inputDto: SearchInputDto): Promise<ProductDto[]> {
+  find(companyId: string, paginationDto: SearchPaginationDto, inputDto: SearchInputDto): Promise<ProductDto[]> {
     const start = performance.now();
 
-    return this.findProductsByParams(paginationDto, inputDto, companyId)
+    return this.findByParams(paginationDto, inputDto, companyId)
     .then( (entityList: Product[]) => entityList.map( (entity) => this.generateProductWithAssociationList(entity, entity.productElement, entity.productFormula) ) )
     .then( (dtoList: ProductDto[]) => {
       
       if(dtoList.length == 0){
         const msg = `products not found`;
-        this.logger.warn(`findProducts: ${msg}`);
+        this.logger.warn(`find: ${msg}`);
         throw new NotFoundException(msg);
-        //return new ProductsResponseDto(HttpStatus.NOT_FOUND, msg);
       }
 
       const end = performance.now();
-      this.logger.log(`findProducts: executed, runtime=${(end - start) / 1000} seconds`);
+      this.logger.log(`find: executed, runtime=${(end - start) / 1000} seconds`);
       return dtoList;
-      //return new ProductsResponseDto(HttpStatus.OK, 'OK', dtoList);
     })
     .catch(error => {
       if(error instanceof NotFoundException)
         throw error;
 
-      this.logger.error(`findProducts: error`, error);
+      this.logger.error(`find: error`, error);
       throw error;
     })
  
   }
 
-  findOneProductByValue(companyId: string, value: string): Promise<ProductDto[]> {
+  findOneByValue(companyId: string, value: string): Promise<ProductDto[]> {
     const start = performance.now();
 
     const inputDto: SearchInputDto = new SearchInputDto(value);
 
-    return this.findProductsByParams({}, inputDto, companyId)
+    return this.findByParams({}, inputDto, companyId)
     .then( (entityList: Product[]) => entityList.map( (entity) => this.generateProductWithAssociationList(entity, entity.productElement, entity.productFormula) ) )
     .then( (dtoList: ProductDto[]) => {
       
       if(dtoList.length == 0){
         const msg = `product not found, value=${value}`;
-        this.logger.warn(`findOneProductByValue: ${msg}`);
+        this.logger.warn(`findOneByValue: ${msg}`);
         throw new NotFoundException(msg);
-        //return new ProductsResponseDto(HttpStatus.NOT_FOUND, msg);
       }
 
       const end = performance.now();
-      this.logger.log(`findOneProductByValue: executed, runtime=${(end - start) / 1000} seconds`);
+      this.logger.log(`findOneByValue: executed, runtime=${(end - start) / 1000} seconds`);
       return dtoList;
-      //return new ProductsResponseDto(HttpStatus.OK, 'OK', dtoList);
     })
     .catch(error => {
       if(error instanceof NotFoundException)
         throw error;
 
-      this.logger.error(`findOneProductByValue: error`, error);
+      this.logger.error(`findOneByValue: error`, error);
       throw error;
     })
     
   }
 
-  removeProduct(id: string): Promise<string> {
-    this.logger.warn(`removeProduct: starting process... id=${id}`);
+  findByCategory(companyId: string, categoryId: string, paginationDto: SearchPaginationDto): Promise<ProductDto[]> {
+    const start = performance.now();
+
+    return this.findProductsByCategory(paginationDto, companyId, categoryId)
+    .then( (entityList: Product[]) => entityList.map( (entity) => this.generateProductWithAssociationList(entity, entity.productElement, entity.productFormula) ) )
+    .then( (dtoList: ProductDto[]) => {
+      
+      if(dtoList.length == 0){
+        const msg = `products not found, categoryId=${categoryId}`;
+        this.logger.warn(`findByCategory: ${msg}`);
+        throw new NotFoundException(msg);
+      }
+
+      const end = performance.now();
+      this.logger.log(`findByCategory: executed, runtime=${(end - start) / 1000} seconds`);
+      return dtoList;
+    })
+    .catch(error => {
+      if(error instanceof NotFoundException)
+        throw error;
+
+      this.logger.error(`findByCategory: error`, error);
+      throw error;
+    })
+    
+  }
+
+  remove(id: string): Promise<string> {
+    this.logger.warn(`remove: starting process... id=${id}`);
     const start = performance.now();
 
     // * find product
     const inputDto: SearchInputDto = new SearchInputDto(id);
     
-    return this.findProductsByParams({}, inputDto)
+    return this.findByParams({}, inputDto)
     .then( (entityList: Product[]) => {
   
       // * validate
       if(entityList.length == 0){
         const msg = `product not found, id=${id}`;
-        this.logger.warn(`removeProduct: not executed (${msg})`);
+        this.logger.warn(`remove: not executed (${msg})`);
         throw new NotFoundException(msg);
-        //return new ProductsResponseDto(HttpStatus.NOT_FOUND, msg);
+        //return new ResponseDto(HttpStatus.NOT_FOUND, msg);
       }
       
       // * delete
@@ -323,9 +297,9 @@ export class ProductService {
         this.replicationService.sendMessages(dataReplicationDto);
 
         const end = performance.now();
-        this.logger.log(`removeProduct: OK, runtime=${(end - start) / 1000} seconds`);
+        this.logger.log(`remove: OK, runtime=${(end - start) / 1000} seconds`);
         return 'deleted';
-        //return new ProductsResponseDto(HttpStatus.OK, 'delete OK');
+        //return new ResponseDto(HttpStatus.OK, 'delete OK');
       })
 
     })
@@ -335,18 +309,18 @@ export class ProductService {
 
       if(error.errno == 1217) {
         const msg = 'product is being used';
-        this.logger.warn(`removeProduct: not executed (${msg})`, error);
+        this.logger.warn(`remove: not executed (${msg})`, error);
         throw new IsBeingUsedException(msg);
-        //return new ProductsResponseDto(HttpStatus.BAD_REQUEST, 'product is being used');
+        //return new ResponseDto(HttpStatus.BAD_REQUEST, 'product is being used');
       }
 
-      this.logger.error('removeProduct: error', error);
+      this.logger.error('remove: error', error);
       throw error;
     })
 
   }
 
-  findProductsByParams(paginationDto: SearchPaginationDto, inputDto: SearchInputDto, companyId?: string): Promise<Product[]> {
+  findByParams(paginationDto: SearchPaginationDto, inputDto: SearchInputDto, companyId?: string): Promise<Product[]> {
     const {page=1, limit=this.dbDefaultLimit} = paginationDto;
 
     // * search by partial name
@@ -403,7 +377,74 @@ export class ProductService {
     
   }
 
-  saveProduct(entity: Product): Promise<Product> {
+  synchronize(companyId: string, paginationDto: SearchPaginationDto): Promise<string> {
+    this.logger.warn(`synchronize: processing paginationDto=${JSON.stringify(paginationDto)}`);
+
+    return this.findAllProducts(paginationDto, companyId)
+    .then( (productList: Product[]) => {
+      
+      if(productList.length == 0){
+        const msg = `synchronization executed`;
+        this.logger.log(`synchronize: ${msg}`);
+        return msg;
+      }
+
+      const productDtoList = productList.map( value => this.generateProductWithAssociationList(value, value.productElement, value.productFormula) );
+      const messageDtoList: MessageDto[] = productDtoList.map( (value: ProductDto) => new MessageDto(SourceEnum.API_PRODUCTS, ProcessEnum.PRODUCT_UPDATE, JSON.stringify(value)) );
+      const dataReplicationDto: DataReplicationDto = new DataReplicationDto(messageDtoList);
+            
+      return this.replicationService.sendMessages(dataReplicationDto)
+      .then( () => {
+        paginationDto.page++;
+        return this.synchronize(companyId, paginationDto);
+      })
+      
+    })
+    .catch( error => {
+      const msg = `not executed (unexpected error)`;
+      this.logger.error(`synchronize: ${msg}, paginationDto=${JSON.stringify(paginationDto)}`, error);
+      return msg;
+    })
+
+  }
+
+  private prepareEntity(entity: Product, dto: ProductDto): Promise<Product> {
+
+    // * find company
+    const inputDto: SearchInputDto = new SearchInputDto(dto.companyId);
+    
+    return this.companyService.findByParams({}, inputDto)
+    .then( (companyList: Company[]) => {
+
+      if(companyList.length == 0){
+        const msg = `company not found, id=${dto.companyId}`;
+        this.logger.warn(`create: not executed (${msg})`);
+        throw new NotFoundException(msg);
+      }
+
+      // * find product type
+      const inputDto: SearchInputDto = new SearchInputDto(dto.productTypeId);
+
+      return this.productTypeService.findByParams({}, inputDto, dto.companyId)
+      .then( (productTypeList: ProductType[]) => {
+        
+        // TODO: cambiar todos los servicios que utilizan compañia para traer la consulta aqui
+        entity.company      = companyList[0];
+        entity.name         = dto.name.toUpperCase();
+        entity.description  = dto.description.toUpperCase();
+        entity.cost         = dto.cost;
+        entity.price        = dto.price;
+        entity.hasFormula   = dto.hasFormula;
+        entity.productType  = productTypeList.length > 0 ? productTypeList[0] : undefined;
+
+        return entity;
+      })
+
+    })
+    
+  }
+
+  private save(entity: Product): Promise<Product> {
     const start = performance.now();
 
     const newEntity: Product = this.productRepository.create(entity);
@@ -411,7 +452,7 @@ export class ProductService {
     return this.productRepository.save(newEntity)
     .then( (entity: Product) => {
       const end = performance.now();
-      this.logger.log(`saveProduct: OK, runtime=${(end - start) / 1000} seconds, entity=${JSON.stringify(entity)}`);
+      this.logger.log(`save: OK, runtime=${(end - start) / 1000} seconds, entity=${JSON.stringify(entity)}`);
       return entity;
     })
   }
@@ -621,6 +662,50 @@ export class ProductService {
     const productDto = new ProductDto(product.company.id, product.name, cost, product.price, product.hasFormula, [], productFormulaDtoList, product.id, product.description);
 
     return productDto;
+  }
+
+  private findAllProducts(paginationDto: SearchPaginationDto, companyId: string): Promise<Product[]> {
+    const {page=1, limit=this.dbDefaultLimit} = paginationDto;
+
+    // * search all
+    return this.productRepository.find({
+      take: limit,
+      skip: (page - 1) * limit,
+      where: {
+        company: { 
+          id: companyId 
+        }
+      },
+      relations: {
+        productElement: true,
+        productFormula: true
+      }
+      
+    })
+    
+  }
+
+  private findProductsByCategory(paginationDto: SearchPaginationDto, companyId: string, categoryId: string): Promise<Product[]> {
+    const {page=1, limit=this.dbDefaultLimit} = paginationDto;
+    
+    return this.productRepository.find({
+      take: limit,
+      skip: (page - 1) * limit,
+      where: {
+        company: { 
+          id: companyId 
+        },
+        productType: {
+          id: categoryId
+        },
+        active: true,
+      },
+      relations: {
+        productElement: true,
+        productFormula: true
+      }
+    })
+    
   }
 
 }

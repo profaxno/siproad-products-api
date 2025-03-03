@@ -6,7 +6,7 @@ import { AppModule } from './app.module';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   
-  //app.setGlobalPrefix('v2')
+  app.setGlobalPrefix('siproad-products')
 
   app.useGlobalPipes(
     new ValidationPipe({

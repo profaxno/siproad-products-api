@@ -24,12 +24,17 @@ export class ElementDto {
   @MaxLength(5)
   unit: string;
 
-  constructor(companyId: string, name: string, cost: number, stock: number, unit: string, id?: string) {
+  @IsOptional()
+  @IsUUID()
+  elementTypeId: string;
+
+  constructor(companyId: string, name: string, cost: number, stock: number, unit: string, id?: string, elementTypeId?: string) {
     this.companyId = companyId;
     this.name = name;
     this.cost = cost;
     this.stock = stock;
     this.unit = unit;
     this.id = id;
+    this.elementTypeId = elementTypeId;
   }
 }

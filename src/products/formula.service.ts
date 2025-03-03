@@ -7,14 +7,11 @@ import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 
 import { FormulaDto, FormulaElementDto } from './dto/formula.dto';
-import { Formula } from './entities/formula.entity';
-import { FormulaElement } from './entities/formula-element.entity';
-
-import { Element } from './entities/element.entity';
+import { Formula, FormulaElement, Element, Company } from './entities';
 
 import { CompanyService } from './company.service';
-import { Company } from './entities/company.entity';
-import { AlreadyExistException, IsBeingUsedException } from './exceptions/products.exception';
+
+import { AlreadyExistException, IsBeingUsedException } from '../common/exceptions/common.exception';
 
 @Injectable()
 export class FormulaService {
@@ -41,15 +38,15 @@ export class FormulaService {
     this.dbDefaultLimit = this.ConfigService.get("dbDefaultLimit");
   }
 
-  async updateFormulaBatch(dtoList: FormulaDto[]): Promise<ProcessSummaryDto>{
-    this.logger.warn(`updateFormulaBatch: starting process... listSize=${dtoList.length}`);
+  async updateBatch(dtoList: FormulaDto[]): Promise<ProcessSummaryDto>{
+    this.logger.warn(`updateBatch: starting process... listSize=${dtoList.length}`);
     const start = performance.now();
     
     let processSummaryDto: ProcessSummaryDto = new ProcessSummaryDto(dtoList.length);
     let i = 0;
     for (const dto of dtoList) {
       
-      await this.updateFormula(dto)
+      await this.update(dto)
       .then( () => {
         processSummaryDto.rowsOK++;
         processSummaryDto.detailsRowsOK.push(`(${i++}) name=${dto.name}, message=OK`);
@@ -62,130 +59,92 @@ export class FormulaService {
     }
     
     const end = performance.now();
-    this.logger.log(`updateFormulaBatch: executed, runtime=${(end - start) / 1000} seconds`);
+    this.logger.log(`updateBatch: executed, runtime=${(end - start) / 1000} seconds`);
     return processSummaryDto;
   }
 
-  updateFormula(dto: FormulaDto): Promise<FormulaDto> {
+  update(dto: FormulaDto): Promise<FormulaDto> {
     if(!dto.id)
-      return this.createFormula(dto); // * create
+      return this.create(dto); // * create
     
-    this.logger.warn(`updateFormula: starting process... dto=${JSON.stringify(dto)}`);
+    this.logger.warn(`update: starting process... dto=${JSON.stringify(dto)}`);
     const start = performance.now();
 
-    // * find company
-    const inputDto: SearchInputDto = new SearchInputDto(dto.companyId);
-    
-    return this.companyService.findCompaniesByParams({}, inputDto)
-    .then( (companyList: Company[]) => {
+    // * find formula
+    const inputDto: SearchInputDto = new SearchInputDto(dto.id);
+      
+    return this.findByParams({}, inputDto)
+    .then( (entityList: Formula[]) => {
 
-      if(companyList.length == 0){
-        const msg = `company not found, id=${dto.companyId}`;
-        this.logger.warn(`updateFormula: not executed (${msg})`);
+      // * validate
+      if(entityList.length == 0){
+        const msg = `formula not found, id=${dto.id}`;
+        this.logger.warn(`update: not executed (${msg})`);
         throw new NotFoundException(msg);
-        //return new ProductsResponseDto(HttpStatus.NOT_FOUND, msg);    
       }
 
-      const company = companyList[0];
-
-      // * find formula
-      const inputDto: SearchInputDto = new SearchInputDto(dto.id);
+      // * update
+      const entity = entityList[0];
+      
+      return this.prepareEntity(entity, dto) // * prepare
+      .then( (entity: Formula) => this.save(entity) ) // * update
+      .then( (entity: Formula) => {
         
-      return this.findFormulasByParams({}, inputDto)
-      .then( (entityList: Formula[]) => {
-
-        // * validate
-        if(entityList.length == 0){
-          const msg = `formula not found, id=${dto.id}`;
-          this.logger.warn(`updateFormula: not executed (${msg})`);
-          throw new NotFoundException(msg);
-          //return new ProductsResponseDto(HttpStatus.NOT_FOUND, msg);  
-        }
-
-        let entity = entityList[0];
-
-        // * update
-        entity.company = company;
-        entity.name = dto.name.toUpperCase();
-        entity.cost = dto.cost;
-
-        return this.saveFormula(entity) // * update formula
-        .then( (entity: Formula) => this.updateFormulaElement(entity, dto.elementList) ) // * create formulaElement
+        return this.updateFormulaElement(entity, dto.elementList) // * create formulaElement
         .then( (formulaElementList: FormulaElement[]) => this.generateFormulaWithElementList(entity, formulaElementList) ) // * generate formula with formulaElement
         .then( (dto: FormulaDto) => {
+          
           const end = performance.now();
-          this.logger.log(`updateFormula: executed, runtime=${(end - start) / 1000} seconds`);
+          this.logger.log(`update: executed, runtime=${(end - start) / 1000} seconds`);
           return dto;
-          //return new ProductsResponseDto(HttpStatus.OK, 'updated OK', [dto]);
         })
-        
-      })
 
+      })
+      
     })
     .catch(error => {
       if(error instanceof NotFoundException)
         throw error;
 
-      this.logger.error(`updateFormula: error`, error);
+      this.logger.error(`update: error`, error);
       throw error;
     })
 
   }
 
-  createFormula(dto: FormulaDto): Promise<FormulaDto> {
-    this.logger.warn(`createFormula: starting process... dto=${JSON.stringify(dto)}`);
+  create(dto: FormulaDto): Promise<FormulaDto> {
+    this.logger.warn(`create: starting process... dto=${JSON.stringify(dto)}`);
     const start = performance.now();
 
-    // * find company
-    const inputDto: SearchInputDto = new SearchInputDto(dto.companyId);
+    // * find formula
+    const inputDto: SearchInputDto = new SearchInputDto(undefined, [dto.name]);
+    
+    return this.findByParams({}, inputDto, dto.companyId)
+    .then( (entityList: Formula[]) => {
 
-    return this.companyService.findCompaniesByParams({}, inputDto)
-    .then( (companyList: Company[]) => {
-
-      if(companyList.length == 0){
-        const msg = `company not found, id=${dto.companyId}`;
-        this.logger.warn(`createFormula: not executed (${msg})`);
-        throw new NotFoundException(msg);
-        //return new ProductsResponseDto(HttpStatus.NOT_FOUND, msg);    
+      // * validate
+      if(entityList.length > 0){
+        const msg = `formula already exists, name=${dto.name}`;
+        this.logger.warn(`create: not executed (${msg})`);
+        throw new AlreadyExistException(msg);
       }
-
-      const company = companyList[0];
-
-      // * find formula
-      const inputDto: SearchInputDto = new SearchInputDto(undefined, [dto.name]);
       
-      return this.findFormulasByParams({}, inputDto, company.id)
-      .then( (entityList: Formula[]) => {
-  
-        // * validate
-        if(entityList.length > 0){
-          const msg = `formula already exists, name=${dto.name}`;
-          this.logger.warn(`createFormula: not executed (${msg})`);
-          throw new AlreadyExistException(msg);
-          //return new ProductsResponseDto(HttpStatus.BAD_REQUEST, msg);
-        }
-        
-        // * create
-        let entity = new Formula();
-        entity.company = company;
-        entity.name = dto.name.toUpperCase();
-        entity.cost = dto.cost;
-  
-        return this.saveFormula(entity) // * create formula
-        .then( (entity: Formula) => {
-  
-          return this.updateFormulaElement(entity, dto.elementList) // * create formulaElement
-          .then( (formulaElementList: FormulaElement[]) => this.generateFormulaWithElementList(entity, formulaElementList) ) // * generate formula with formulaElement
-          .then( (dto: FormulaDto) => {
-  
-            const end = performance.now();
-            this.logger.log(`createFormula: created OK, runtime=${(end - start) / 1000} seconds`);
-            return dto;
-            //return new ProductsResponseDto(HttpStatus.OK, 'created OK', [dto]);
-          })
-  
+      // * create
+      const entity = new Formula();
+      
+      return this.prepareEntity(entity, dto) // * prepare
+      .then( (entity: Formula) => this.save(entity) ) // * update
+      .then( (entity: Formula) => {
+
+        return this.updateFormulaElement(entity, dto.elementList) // * create formulaElement
+        .then( (formulaElementList: FormulaElement[]) => this.generateFormulaWithElementList(entity, formulaElementList) ) // * generate formula with formulaElement
+        .then( (dto: FormulaDto) => {
+
+          const end = performance.now();
+          this.logger.log(`create: created OK, runtime=${(end - start) / 1000} seconds`);
+          return dto;
         })
-  
+
       })
 
     })
@@ -193,94 +152,88 @@ export class FormulaService {
       if(error instanceof NotFoundException || error instanceof AlreadyExistException)
         throw error;
 
-      this.logger.error(`createFormula: error`, error);
+      this.logger.error(`create: error`, error);
       throw error;
     })
     
   }
 
-  findFormulas(companyId: string, paginationDto: SearchPaginationDto, inputDto: SearchInputDto): Promise<FormulaDto[]> {
+  find(companyId: string, paginationDto: SearchPaginationDto, inputDto: SearchInputDto): Promise<FormulaDto[]> {
     const start = performance.now();
 
-    return this.findFormulasByParams(paginationDto, inputDto, companyId)
+    return this.findByParams(paginationDto, inputDto, companyId)
     .then( (entityList: Formula[]) => entityList.map( (entity) => this.generateFormulaWithElementList(entity, entity.formulaElement) ) )
     .then( (dtoList: FormulaDto[]) => {
       
       if(dtoList.length == 0){
         const msg = `formulas not found`;
-        this.logger.warn(`findFormulas: ${msg}`);
+        this.logger.warn(`find: ${msg}`);
         throw new NotFoundException(msg);
-        //return new ProductsResponseDto(HttpStatus.NOT_FOUND, msg);
       }
 
       const end = performance.now();
-      this.logger.log(`findFormulas: executed, runtime=${(end - start) / 1000} seconds`);
+      this.logger.log(`find: executed, runtime=${(end - start) / 1000} seconds`);
       return dtoList;
-      //return new ProductsResponseDto(HttpStatus.OK, 'OK', dtoList);
     })
     .catch(error => {
-      this.logger.error(`findFormulas: error`, error);
+      this.logger.error(`find: error`, error);
       throw error;
     })
  
   }
 
-  findOneFormulaByValue(companyId: string, value: string): Promise<FormulaDto[]> {
+  findOneByValue(companyId: string, value: string): Promise<FormulaDto[]> {
     const start = performance.now();
     const inputDto: SearchInputDto = new SearchInputDto(value);
         
     // * find element
-    return this.findFormulasByParams({}, inputDto, companyId)
+    return this.findByParams({}, inputDto, companyId)
     .then( (entityList: Formula[]) => entityList.map( (entity) => this.generateFormulaWithElementList(entity, entity.formulaElement) ) )
     .then( (dtoList: FormulaDto[]) => {
       
       if(dtoList.length == 0){
         const msg = `formula not found, value=${value}`;
-        this.logger.warn(`findOneFormulaByValue: ${msg}`);
+        this.logger.warn(`findOneByValue: ${msg}`);
         throw new NotFoundException(msg);
-        //return new ProductsResponseDto(HttpStatus.NOT_FOUND, msg);
       }
 
       const end = performance.now();
-      this.logger.log(`findOneFormulaByValue: executed, runtime=${(end - start) / 1000} seconds`);
+      this.logger.log(`findOneByValue: executed, runtime=${(end - start) / 1000} seconds`);
       return dtoList;
-      //return new ProductsResponseDto(HttpStatus.OK, 'OK', dtoList);
     })
     .catch(error => {
       if(error instanceof NotFoundException)
         throw error;
 
-      this.logger.error(`findOneFormulaByValue: error`, error);
+      this.logger.error(`findOneByValue: error`, error);
       throw error;
     })
     
   }
 
-  removeFormula(id: string): Promise<string> {
-    this.logger.log(`removeFormula: starting process... id=${id}`);
+  remove(id: string): Promise<string> {
+    this.logger.log(`remove: starting process... id=${id}`);
     const start = performance.now();
 
     // * find formula
     const inputDto: SearchInputDto = new SearchInputDto(id);
     
-    return this.findFormulasByParams({}, inputDto)
+    return this.findByParams({}, inputDto)
     .then( (entityList: Formula[]) => {
   
       // * validate
       if(entityList.length == 0){
         const msg = `formula not found, id=${id}`;
-        this.logger.warn(`removeFormula: not executed (${msg})`);
+        this.logger.warn(`remove: not executed (${msg})`);
         throw new NotFoundException(msg);
-        //return new ProductsResponseDto(HttpStatus.NOT_FOUND, msg);
       }
 
       // * delete
       return this.formulaRepository.delete(id) // * delete formula and formulaElement on cascade
       .then( () => {
         const end = performance.now();
-        this.logger.log(`removeFormula: OK, runtime=${(end - start) / 1000} seconds`);
+        this.logger.log(`remove: OK, runtime=${(end - start) / 1000} seconds`);
         return 'deleted';
-        //return new ProductsResponseDto(HttpStatus.OK, 'delete OK');
 
       })
 
@@ -293,60 +246,39 @@ export class FormulaService {
         const msg = 'formula is being used';
         this.logger.warn(`removeProduct: not executed (${msg})`, error);
         throw new IsBeingUsedException(msg);
-        //return new ProductsResponseDto(HttpStatus.BAD_REQUEST, 'product is being used');
       }
 
-      this.logger.error('removeFormula: error', error);
+      this.logger.error('remove: error', error);
       throw error;
     })
 
   }
-  
-  // removeFormula(id: string): Promise<ProductsResponseDto> {
-  //   this.logger.log(`removeFormula: starting process... id=${id}`);
-  //   const start = performance.now();
 
-  //   // * find formula
-  //   const inputDto: SearchInputDto = new SearchInputDto(id);
+  private prepareEntity(entity: Formula, dto: FormulaDto): Promise<Formula> {
+  
+    // * find company
+    const inputDto: SearchInputDto = new SearchInputDto(dto.companyId);
     
-  //   return this.findFormulasByParams({}, inputDto)
-  //   .then( (entityList: Formula[]) => {
-  
-  //     // * validate
-  //     if(entityList.length == 0){
-  //       const msg = `formula not found, id=${id}`;
-  //       return new ProductsResponseDto(HttpStatus.NOT_FOUND, msg);
-  //     }
+    return this.companyService.findByParams({}, inputDto)
+    .then( (companyList: Company[]) => {
 
-  //     const entity = entityList[0];
+      if(companyList.length == 0){
+        const msg = `company not found, id=${dto.companyId}`;
+        this.logger.warn(`create: not executed (${msg})`);
+        throw new NotFoundException(msg);
+      }
+
+      entity.company = companyList[0];
+      entity.name = dto.name.toUpperCase();
+      entity.cost = dto.cost;
+
+      return entity;
       
-  //     // TODO: Posiblemente eliminar los formula-element se deba hacer via CASCADE true
-  //     // * remove
-  //     return this.formulaElementRepository.findBy( { formula: entity } ) // * find formulaElement
-  //     .then( (formulaElementList: FormulaElement[]) => this.formulaElementRepository.remove(formulaElementList)) // * remove formulaElements
-  //     .then( () => this.formulaRepository.remove(entity) ) // * remove formula
-  //     .then( (entity: Formula) => {
+    })
+    
+  }
 
-  //       const end = performance.now();
-  //       this.logger.log(`removeFormula: OK, runtime=${(end - start) / 1000} seconds`);
-  //       return new ProductsResponseDto(HttpStatus.OK, 'delete OK');
-
-  //     })
-
-  //   })
-  //   .catch(error => {
-  //     if(error.errno == 1217) {
-  //       this.logger.warn('removeFormula: not executed, error', error);
-  //       return new ProductsResponseDto(HttpStatus.BAD_REQUEST, 'formula is being used');
-  //     }
-
-  //     this.logger.error('removeFormula: error', error);
-  //     throw error;
-  //   })
-
-  // }
-
-  private findFormulasByParams(paginationDto: SearchPaginationDto, inputDto: SearchInputDto, companyId?: string): Promise<Formula[]> {
+  private findByParams(paginationDto: SearchPaginationDto, inputDto: SearchInputDto, companyId?: string): Promise<Formula[]> {
     const {page=1, limit=this.dbDefaultLimit} = paginationDto;
 
     // * search by partial name
@@ -399,7 +331,7 @@ export class FormulaService {
     
   }
 
-  private saveFormula(entity: Formula): Promise<Formula> {
+  private save(entity: Formula): Promise<Formula> {
     const start = performance.now();
 
     const newEntity: Formula = this.formulaRepository.create(entity);
@@ -407,7 +339,7 @@ export class FormulaService {
     return this.formulaRepository.save(newEntity)
     .then( (entity: Formula) => {
       const end = performance.now();
-      this.logger.log(`saveFormula: OK, runtime=${(end - start) / 1000} seconds, entity=${JSON.stringify(entity)}`);
+      this.logger.log(`save: OK, runtime=${(end - start) / 1000} seconds, entity=${JSON.stringify(entity)}`);
       return entity;
     })
   }

@@ -1,6 +1,5 @@
 import { Column, Entity, ManyToOne, PrimaryGeneratedColumn } from "typeorm";
-import { Element } from "./element.entity";
-import { Formula } from "./formula.entity";
+import { Formula, Element } from "./";
 
 @Entity("pro_formula_element")
 export class FormulaElement {

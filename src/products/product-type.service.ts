@@ -6,24 +6,24 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 
-import { ElementDto } from './dto/element.dto';
-import { Element, Company } from './entities';
+import { ProductTypeDto } from './dto/product-type.dto';
+import { ProductType, Company } from './entities';
 
 import { CompanyService } from './company.service';
 import { AlreadyExistException, IsBeingUsedException } from '../common/exceptions/common.exception';
 
 @Injectable()
-export class ElementService {
+export class ProductTypeService {
 
-  private readonly logger = new Logger(ElementService.name);
+  private readonly logger = new Logger(ProductTypeService.name);
 
   private dbDefaultLimit = 1000;
 
   constructor(
     private readonly ConfigService: ConfigService,
 
-    @InjectRepository(Element, 'productsConn')
-    private readonly elementRepository: Repository<Element>,
+    @InjectRepository(ProductType, 'productsConn')
+    private readonly productTypeRepository: Repository<ProductType>,
 
     private readonly companyService: CompanyService
     
@@ -31,7 +31,7 @@ export class ElementService {
     this.dbDefaultLimit = this.ConfigService.get("dbDefaultLimit");
   }
   
-  async updateBatch(dtoList: ElementDto[]): Promise<ProcessSummaryDto>{
+  async updateBatch(dtoList: ProductTypeDto[]): Promise<ProcessSummaryDto>{
     this.logger.warn(`updateBatch: starting process... listSize=${dtoList.length}`);
     const start = performance.now();
     
@@ -42,11 +42,11 @@ export class ElementService {
       await this.update(dto)
       .then( () => {
         processSummaryDto.rowsOK++;
-        processSummaryDto.detailsRowsOK.push(`(${i++}) name=${dto.name}, message=OK`);
+        processSummaryDto.detailsRowsOK.push(`(${i++}) name=${dto.label}, message=OK`);
       })
       .catch(error => {
         processSummaryDto.rowsKO++;
-        processSummaryDto.detailsRowsKO.push(`(${i++}) name=${dto.name}, error=${error}`);
+        processSummaryDto.detailsRowsKO.push(`(${i++}) name=${dto.label}, error=${error}`);
       })
 
     }
@@ -56,33 +56,33 @@ export class ElementService {
     return processSummaryDto;
   }
 
-  update(dto: ElementDto): Promise<ElementDto> {
+  update(dto: ProductTypeDto): Promise<ProductTypeDto> {
     if(!dto.id)
       return this.create(dto); // * create
     
     this.logger.warn(`update: starting process... dto=${JSON.stringify(dto)}`);
     const start = performance.now();
 
-    // * find element
+    // * find productType
     const inputDto: SearchInputDto = new SearchInputDto(dto.id);
       
     return this.findByParams({}, inputDto)
-    .then( (entityList: Element[]) => {
+    .then( (entityList: ProductType[]) => {
 
       // * validate
       if(entityList.length == 0){
-        const msg = `element not found, id=${dto.id}`;
+        const msg = `productType not found, id=${dto.id}`;
         this.logger.warn(`update: not executed (${msg})`);
         throw new NotFoundException(msg);
       }
 
       // * update
       const entity = entityList[0];
-      
+              
       return this.prepareEntity(entity, dto) // * prepare
-      .then( (entity: Element) => this.save(entity) ) // * update
-      .then( (entity: Element) => {
-        const dto = new ElementDto(entity.company.id, entity.name, entity.cost, entity.stock, entity.unit, entity.id); // * map to dto
+      .then( (entity: ProductType) => this.save(entity) ) // * update
+      .then( (entity: ProductType) => {
+        const dto = new ProductTypeDto(entity.company.id, entity.label, entity.id); // * map to dto
 
         const end = performance.now();
         this.logger.log(`update: executed, runtime=${(end - start) / 1000} seconds`);
@@ -100,30 +100,30 @@ export class ElementService {
 
   }
 
-  create(dto: ElementDto): Promise<ElementDto> {
+  create(dto: ProductTypeDto): Promise<ProductTypeDto> {
     this.logger.warn(`create: starting process... dto=${JSON.stringify(dto)}`);
     const start = performance.now();
-    
-    // * find element
-    const inputDto: SearchInputDto = new SearchInputDto(undefined, [dto.name]);
+
+    // * find productType
+    const inputDto: SearchInputDto = new SearchInputDto(undefined, [dto.label]);
       
     return this.findByParams({}, inputDto, dto.companyId)
-    .then( (entityList: Element[]) => {
+    .then( (entityList: ProductType[]) => {
 
       // * validate
       if(entityList.length > 0){
-        const msg = `element already exists, name=${dto.name}`;
+        const msg = `productType already exists, name=${dto.label}`;
         this.logger.warn(`create: not executed (${msg})`);
         throw new AlreadyExistException(msg);
       }
 
       // * create
-      const entity = new Element();
+      const entity = new ProductType();
       
       return this.prepareEntity(entity, dto) // * prepare
-      .then( (entity: Element) => this.save(entity) ) // * update
-      .then( (entity: Element) => {
-        const dto = new ElementDto(entity.company.id, entity.name, entity.cost, entity.stock, entity.unit, entity.id); // * map to dto 
+      .then( (entity: ProductType) => this.save(entity) ) // * update
+      .then( (entity: ProductType) => {
+        const dto = new ProductTypeDto(entity.company.id, entity.label, entity.id); // * map to dto 
 
         const end = performance.now();
         this.logger.log(`create: OK, runtime=${(end - start) / 1000} seconds`);
@@ -141,15 +141,15 @@ export class ElementService {
 
   }
 
-  find(companyId: string, paginationDto: SearchPaginationDto, inputDto: SearchInputDto): Promise<ElementDto[]> {
+  find(companyId: string, paginationDto: SearchPaginationDto, inputDto: SearchInputDto): Promise<ProductTypeDto[]> {
     const start = performance.now();
 
     return this.findByParams(paginationDto, inputDto, companyId)
-    .then( (entityList: Element[]) => entityList.map( (entity: Element) => new ElementDto(entity.company.id, entity.name, entity.cost, entity.stock, entity.unit, entity.id) ) )// * map entities to DTOs
-    .then( (dtoList: ElementDto[]) => {
+    .then( (entityList: ProductType[]) => entityList.map( (entity: ProductType) => new ProductTypeDto(entity.company.id, entity.label, entity.id) ) )// * map entities to DTOs
+    .then( (dtoList: ProductTypeDto[]) => {
       
       if(dtoList.length == 0){
-        const msg = `elements not found`;
+        const msg = `productTypes not found`;
         this.logger.warn(`find: ${msg}`);
         throw new NotFoundException(msg);
       }
@@ -168,17 +168,17 @@ export class ElementService {
 
   }
 
-  findOneByValue(companyId: string, value: string): Promise<ElementDto[]> {
+  findOneByValue(companyId: string, value: string): Promise<ProductTypeDto[]> {
     const start = performance.now();
 
     const inputDto: SearchInputDto = new SearchInputDto(value);
     
     return this.findByParams({}, inputDto, companyId)
-    .then( (entityList: Element[]) => entityList.map( (entity: Element) => new ElementDto(entity.company.id, entity.name, entity.cost, entity.stock, entity.unit, entity.id) ) )// * map entities to DTOs
-    .then( (dtoList: ElementDto[]) => {
+    .then( (entityList: ProductType[]) => entityList.map( (entity: ProductType) => new ProductTypeDto(entity.company.id, entity.label, entity.id) ) )// * map entities to DTOs
+    .then( (dtoList: ProductTypeDto[]) => {
       
       if(dtoList.length == 0){
-        const msg = `element not found, value=${value}`;
+        const msg = `productType not found, value=${value}`;
         this.logger.warn(`findOneByValue: ${msg}`);
         throw new NotFoundException(msg);
       }
@@ -201,20 +201,20 @@ export class ElementService {
     this.logger.log(`remove: starting process... id=${id}`);
     const start = performance.now();
 
-    // * find element
+    // * find productType
     const inputDto: SearchInputDto = new SearchInputDto(id);
     
     return this.findByParams({}, inputDto)
-    .then( (entityList: Element[]) => {
+    .then( (entityList: ProductType[]) => {
       
       if(entityList.length == 0){
-        const msg = `element not found, id=${id}`;
+        const msg = `productType not found, id=${id}`;
         this.logger.warn(`remove: not executed (${msg})`);
         throw new NotFoundException(msg);
       }
 
       // * delete
-      return this.elementRepository.delete(id)
+      return this.productTypeRepository.delete(id)
       .then( () => {
         const end = performance.now();
         this.logger.log(`remove: OK, runtime=${(end - start) / 1000} seconds`);
@@ -227,7 +227,7 @@ export class ElementService {
         throw error;
 
       if(error.errno == 1217) {
-        const msg = 'element is being used';
+        const msg = 'productType is being used';
         this.logger.warn(`removeProduct: not executed (${msg})`, error);
         throw new IsBeingUsedException(msg);
       }
@@ -238,8 +238,52 @@ export class ElementService {
 
   }
 
-  private prepareEntity(entity: Element, dto: ElementDto): Promise<Element> {
+  findByParams(paginationDto: SearchPaginationDto, inputDto: SearchInputDto, companyId?: string): Promise<ProductType[]> {
+    const {page=1, limit=this.dbDefaultLimit} = paginationDto;
 
+    // * search by partial name
+    const value = inputDto.search
+    if(value) {
+      const whereByName = { company: { id: companyId}, label: Like(`%${inputDto.search}%`) };
+      const whereById   = { id: value };
+      const where = isUUID(value) ? whereById : whereByName;
+
+      return this.productTypeRepository.find({
+        take: limit,
+        skip: (page - 1) * limit,
+        where: where
+      })
+    }
+
+    // * search by names
+    if(inputDto.searchList) {
+      return this.productTypeRepository.find({
+        take: limit,
+        skip: (page - 1) * limit,
+        where: {
+          company: {
+            id: companyId
+          },
+          label: In(inputDto.searchList)
+        }
+      })
+    }
+
+    // * search all
+    return this.productTypeRepository.find({
+      take: limit,
+      skip: (page - 1) * limit,
+      where: { 
+        company: {
+          id: companyId
+        }
+      }
+    })
+    
+  }
+
+  private prepareEntity(entity: ProductType, dto: ProductTypeDto): Promise<ProductType> {
+    
     // * find company
     const inputDto: SearchInputDto = new SearchInputDto(dto.companyId);
     
@@ -253,71 +297,21 @@ export class ElementService {
       }
 
       entity.company = companyList[0];
-      entity.name = dto.name.toUpperCase()
-      entity.cost = dto.cost;
-      entity.stock = dto.stock;
-      entity.unit = dto.unit;
-      // entity.elementType = xxx;
-
+      entity.label = dto.label.toUpperCase();
+      
       return entity;
       
     })
     
   }
 
-  private findByParams(paginationDto: SearchPaginationDto, inputDto: SearchInputDto, companyId?: string): Promise<Element[]> {
-    const {page=1, limit=this.dbDefaultLimit} = paginationDto;
-
-    // * search by partial name
-    const value = inputDto.search
-    if(value) {
-      const whereByName = { company: { id: companyId}, name: Like(`%${inputDto.search}%`), active: true };
-      const whereById   = { id: value, active: true };
-      const where = isUUID(value) ? whereById : whereByName;
-
-      return this.elementRepository.find({
-        take: limit,
-        skip: (page - 1) * limit,
-        where: where
-      })
-    }
-
-    // * search by names
-    if(inputDto.searchList) {
-      return this.elementRepository.find({
-        take: limit,
-        skip: (page - 1) * limit,
-        where: {
-          company: {
-            id: companyId
-          },
-          name: In(inputDto.searchList),
-          active: true,
-        }
-      })
-    }
-
-    // * search all
-    return this.elementRepository.find({
-      take: limit,
-      skip: (page - 1) * limit,
-      where: { 
-        company: {
-          id: companyId
-        },
-        active: true 
-      }
-    })
-    
-  }
-
-  private save(entity: Element): Promise<Element> {
+  private save(entity: ProductType): Promise<ProductType> {
     const start = performance.now();
 
-    const newEntity: Element = this.elementRepository.create(entity);
+    const newEntity: ProductType = this.productTypeRepository.create(entity);
 
-    return this.elementRepository.save(newEntity)
-    .then( (entity: Element) => {
+    return this.productTypeRepository.save(newEntity)
+    .then( (entity: ProductType) => {
       const end = performance.now();
       this.logger.log(`save: OK, runtime=${(end - start) / 1000} seconds, entity=${JSON.stringify(entity)}`);
       return entity;

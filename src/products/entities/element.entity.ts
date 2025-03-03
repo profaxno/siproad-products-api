@@ -1,7 +1,5 @@
-import { Column, Entity, ManyToOne, OneToMany, OneToOne, PrimaryGeneratedColumn } from "typeorm";
-import { Company } from "./company.entity";
-import { ProductElement } from "./product-element.entity";
-import { FormulaElement } from "./formula-element.entity";
+import { Column, CreateDateColumn, Entity, ManyToOne, OneToMany, OneToOne, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
+import { Company, ProductElement, FormulaElement, ElementType } from "./";
 
 @Entity("pro_element")
 export class Element {
@@ -9,10 +7,7 @@ export class Element {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column('varchar', { 
-    length: 45,
-    unique: true
-  })
+  @Column('varchar', { length: 45, unique: true })
   name: string;
 
   @Column('double')
@@ -21,16 +16,16 @@ export class Element {
   @Column('double')
   stock: number;
 
-  @Column('varchar', { 
-    length: 5,
-  })
+  @Column('varchar', { length: 5 })
   unit: string;
 
-  // TODO: falta agregar createAt y UpdatedAt
+  @CreateDateColumn({ type: 'timestamp' })
+  createdAt: Date;
 
-  @Column('boolean', {
-    default: true
-  })
+  @UpdateDateColumn({ type: 'timestamp' })
+  updatedAt: Date;
+
+  @Column('boolean', { default: true })
   active: boolean
 
   @ManyToOne(
@@ -51,4 +46,12 @@ export class Element {
     (formulaElement) => formulaElement.element
   )
   formulaElement: FormulaElement;
+
+  @ManyToOne(
+    () => ElementType,
+    (elementType) => elementType.element,
+    { eager: true }
+  )
+  elementType: ElementType;
+
 }

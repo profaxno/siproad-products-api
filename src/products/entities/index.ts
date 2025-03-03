@@ -1,0 +1,9 @@
+export { Company } from "./company.entity";
+export { Product } from "./product.entity";
+export { ProductFormula } from "./product-formula.entity";
+export { Formula } from "./formula.entity";
+export { FormulaElement } from "./formula-element.entity";
+export { Element } from "./element.entity";
+export { ProductElement } from "./product-element.entity";
+export { ProductType } from "./product-type.entity";
+export { ElementType } from "./element-type.entity";
