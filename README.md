@@ -3,7 +3,7 @@
 </p>
 
 # siproad-products-api
-Api central del sistema siproad que permite gestionar elementos, productos y ordenes.
+Api del sistema siproad que permite gestionar elementos y productos.
 
 ```
 - Lenguaje: Nodejs (Nest), typescript.
