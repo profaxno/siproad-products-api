@@ -20,9 +20,11 @@ Api central del sistema siproad que permite gestionar elementos, productos y ord
 * Configurar los valores de las variables de entornos correspondientes ```.env```
 * Actualizar node_modules ```npm install```
 
-Nota: siproad-admin-api tiene los pasos para la creación de la base de datos en su docker-compose.
+### Configuración de la base de datos (docker)
+* La configuración se encuentra en el docker-compose del repo siproad-admin-api.
 
 ## Configuración ambiente stg
 
 ### Configuración de la api
+* Apuntar el archivo .env a las variables de staging.
 * Crear contenedor de api ```docker-compose -p siproad up -d```
