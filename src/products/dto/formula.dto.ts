@@ -23,7 +23,7 @@ export class FormulaDto {
   @Type(() => FormulaElementDto)
   elementList?: FormulaElementDto[];
 
-  constructor(companyId: string, name: string, cost: number, elementList: FormulaElementDto[], id?: string){
+  constructor(companyId: string, name: string, cost: number, id?: string, elementList?: FormulaElementDto[]){
     this.companyId = companyId;
     this.name = name;
     this.cost = cost;

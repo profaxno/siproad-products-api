@@ -19,6 +19,9 @@ export class Product {
   @Column('double')
   price: number;
 
+  @Column('varchar', { length: 255, nullable: true })
+  urlImagen: string;
+
   @Column('boolean', { default: false })
   hasFormula: boolean
 

@@ -10,6 +10,10 @@ export class ElementDto {
   @IsUUID()
   companyId: string;
 
+  @IsOptional()
+  @IsUUID()
+  elementTypeId?: string;
+
   @IsString()
   @MaxLength(45)
   name: string;
@@ -23,10 +27,6 @@ export class ElementDto {
   @IsIn([MeasuresEnum.UN, MeasuresEnum.KG])
   @MaxLength(5)
   unit: string;
-
-  @IsOptional()
-  @IsUUID()
-  elementTypeId: string;
 
   constructor(companyId: string, name: string, cost: number, stock: number, unit: string, id?: string, elementTypeId?: string) {
     this.companyId = companyId;

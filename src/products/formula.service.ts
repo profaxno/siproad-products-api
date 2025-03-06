@@ -432,7 +432,7 @@ export class FormulaService {
     } 
 
     // * generate formula dto
-    const formulaDto = new FormulaDto(formula.company.id, formula.name, cost, formulaElementDtoList, formula.id);
+    const formulaDto = new FormulaDto(formula.company.id, formula.name, cost, formula.id, formulaElementDtoList);
 
     return formulaDto;
   }

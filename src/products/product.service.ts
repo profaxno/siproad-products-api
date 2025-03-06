@@ -18,6 +18,7 @@ import { DataReplicationService } from 'src/data-replication/data-replication.se
 
 import { AlreadyExistException, IsBeingUsedException } from '../common/exceptions/common.exception';
 import { ProductTypeService } from './product-type.service';
+import { JsonBasic } from 'src/data-replication/interfaces/json-basic.interface';
 
 @Injectable()
 export class ProductService {
@@ -285,14 +286,16 @@ export class ProductService {
         //return new ResponseDto(HttpStatus.NOT_FOUND, msg);
       }
       
-      // * delete
-      return this.productRepository.delete(id) // * delete product and productElement on cascade
-      .then( () => {
+      // * delete: update field active
+      const entity = entityList[0];
+      entity.active = false;
+
+      return this.save(entity)
+      .then( (entity: Product) => {
 
         // * replication data
-        const entity = entityList[0];
-        const dto = new ProductDto(entity.company.id, entity.name, entity.cost, entity.price, entity.hasFormula, [], [], entity.id); // * map to dto
-        const messageDto = new MessageDto(SourceEnum.API_PRODUCTS, ProcessEnum.PRODUCT_DELETE, JSON.stringify(dto));
+        const jsonBasic: JsonBasic = { id: entity.id }
+        const messageDto = new MessageDto(SourceEnum.API_PRODUCTS, ProcessEnum.PRODUCT_DELETE, JSON.stringify(jsonBasic));
         const dataReplicationDto: DataReplicationDto = new DataReplicationDto([messageDto]);
         this.replicationService.sendMessages(dataReplicationDto);
 
@@ -429,7 +432,6 @@ export class ProductService {
       return this.productTypeService.findByParams({}, inputDto, dto.companyId)
       .then( (productTypeList: ProductType[]) => {
         
-        // TODO: cambiar todos los servicios que utilizan compañia para traer la consulta aqui
         entity.company      = companyList[0];
         entity.name         = dto.name.toUpperCase();
         entity.description  = dto.description.toUpperCase();
@@ -629,7 +631,7 @@ export class ProductService {
     } 
 
     // * generate product dto
-    const productDto = new ProductDto(product.company.id, product.name, cost, product.price, product.hasFormula, productElementDtoList, [], product.id, product.description);
+    const productDto = new ProductDto(product.company.id, product.name, cost, product.price, product.hasFormula, product.id, product.productType.id, product.description, product.urlImagen, productElementDtoList, []);
 
     return productDto;
   }
@@ -660,7 +662,7 @@ export class ProductService {
     }
 
     // * generate product dto
-    const productDto = new ProductDto(product.company.id, product.name, cost, product.price, product.hasFormula, [], productFormulaDtoList, product.id, product.description);
+    const productDto = new ProductDto(product.company.id, product.name, cost, product.price, product.hasFormula, product.id, product.productType.id, product.description, product.urlImagen, [], productFormulaDtoList);
 
     return productDto;
   }

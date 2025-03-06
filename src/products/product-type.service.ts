@@ -11,6 +11,10 @@ import { ProductType, Company } from './entities';
 
 import { CompanyService } from './company.service';
 import { AlreadyExistException, IsBeingUsedException } from '../common/exceptions/common.exception';
+import { DataReplicationService } from 'src/data-replication/data-replication.service';
+import { DataReplicationDto, MessageDto } from 'src/data-replication/dto/data-replication.dto';
+import { ProcessEnum, SourceEnum } from 'src/data-replication/enum';
+import { JsonBasic } from 'src/data-replication/interfaces/json-basic.interface';
 
 @Injectable()
 export class ProductTypeService {
@@ -25,7 +29,8 @@ export class ProductTypeService {
     @InjectRepository(ProductType, 'productsConn')
     private readonly productTypeRepository: Repository<ProductType>,
 
-    private readonly companyService: CompanyService
+    private readonly companyService: CompanyService,
+    private readonly replicationService: DataReplicationService
     
   ){
     this.dbDefaultLimit = this.ConfigService.get("dbDefaultLimit");
@@ -82,7 +87,12 @@ export class ProductTypeService {
       return this.prepareEntity(entity, dto) // * prepare
       .then( (entity: ProductType) => this.save(entity) ) // * update
       .then( (entity: ProductType) => {
-        const dto = new ProductTypeDto(entity.company.id, entity.label, entity.id); // * map to dto
+        dto = new ProductTypeDto(entity.company.id, entity.label, entity.id); // * map to dto
+
+        // * replication data
+        const messageDto = new MessageDto(SourceEnum.API_PRODUCTS, ProcessEnum.PRODUCT_TYPE_UPDATE, JSON.stringify(dto));
+        const dataReplicationDto: DataReplicationDto = new DataReplicationDto([messageDto]);
+        this.replicationService.sendMessages(dataReplicationDto);
 
         const end = performance.now();
         this.logger.log(`update: executed, runtime=${(end - start) / 1000} seconds`);
@@ -123,8 +133,13 @@ export class ProductTypeService {
       return this.prepareEntity(entity, dto) // * prepare
       .then( (entity: ProductType) => this.save(entity) ) // * update
       .then( (entity: ProductType) => {
-        const dto = new ProductTypeDto(entity.company.id, entity.label, entity.id); // * map to dto 
+        dto = new ProductTypeDto(entity.company.id, entity.label, entity.id); // * map to dto 
 
+        // * replication data
+        const messageDto = new MessageDto(SourceEnum.API_PRODUCTS, ProcessEnum.PRODUCT_TYPE_UPDATE, JSON.stringify(dto));
+        const dataReplicationDto: DataReplicationDto = new DataReplicationDto([messageDto]);
+        this.replicationService.sendMessages(dataReplicationDto);
+        
         const end = performance.now();
         this.logger.log(`create: OK, runtime=${(end - start) / 1000} seconds`);
         return dto;
@@ -214,8 +229,17 @@ export class ProductTypeService {
       }
 
       // * delete
+      const entity = entityList[0];
+
       return this.productTypeRepository.delete(id)
       .then( () => {
+
+        // * replication data
+        const jsonBasic: JsonBasic = { id: entity.id }
+        const messageDto = new MessageDto(SourceEnum.API_PRODUCTS, ProcessEnum.PRODUCT_TYPE_DELETE, JSON.stringify(jsonBasic));
+        const dataReplicationDto: DataReplicationDto = new DataReplicationDto([messageDto]);
+        this.replicationService.sendMessages(dataReplicationDto);
+
         const end = performance.now();
         this.logger.log(`remove: OK, runtime=${(end - start) / 1000} seconds`);
         return 'deleted';

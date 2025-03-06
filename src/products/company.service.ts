@@ -51,7 +51,7 @@ export class CompanyService {
       
       return this.save(entity)
       .then( (entity: Company) => {
-        const dto = new CompanyDto(entity.name, entity.id); // * map to dto
+        dto = new CompanyDto(entity.name, entity.id); // * map to dto
 
         const end = performance.now();
         this.logger.log(`update: executed, runtime=${(end - start) / 1000} seconds`);
@@ -93,7 +93,7 @@ export class CompanyService {
       
       return this.save(entity)
       .then( (entity: Company) => {
-        const dto = new CompanyDto(entity.name, entity.id); // * map to dto
+        dto = new CompanyDto(entity.name, entity.id); // * map to dto
 
         const end = performance.now();
         this.logger.log(`create: OK, runtime=${(end - start) / 1000} seconds`);

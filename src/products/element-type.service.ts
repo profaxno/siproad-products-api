@@ -82,7 +82,7 @@ export class ElementTypeService {
       return this.prepareEntity(entity, dto) // * prepare
       .then( (entity: ElementType) => this.save(entity) ) // * update
       .then( (entity: ElementType) => {
-        const dto = new ElementTypeDto(entity.company.id, entity.label, entity.id); // * map to dto
+        dto = new ElementTypeDto(entity.company.id, entity.label, entity.id); // * map to dto
 
         const end = performance.now();
         this.logger.log(`update: executed, runtime=${(end - start) / 1000} seconds`);
@@ -123,7 +123,7 @@ export class ElementTypeService {
       return this.prepareEntity(entity, dto) // * prepare
       .then( (entity: ElementType) => this.save(entity) ) // * update
       .then( (entity: ElementType) => {
-        const dto = new ElementTypeDto(entity.company.id, entity.label, entity.id); // * map to dto 
+        dto = new ElementTypeDto(entity.company.id, entity.label, entity.id); // * map to dto 
 
         const end = performance.now();
         this.logger.log(`create: OK, runtime=${(end - start) / 1000} seconds`);

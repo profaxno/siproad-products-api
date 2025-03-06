@@ -11,15 +11,29 @@ export class ProductDto {
   @IsUUID()
   companyId: string;
 
+  @IsOptional()
+  @IsUUID()
+  productTypeId?: string;
+
   @IsString()
   @MaxLength(45)
   name: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  description: string;
 
   @IsNumber()
   cost: number;
 
   @IsNumber()
   price: number;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  imagenUrl?: string;
 
   @IsBoolean()
   hasFormula: boolean;
@@ -36,16 +50,7 @@ export class ProductDto {
   @Type(() => ProductFormulaDto)
   formulaList?: ProductFormulaDto[];
 
-  @IsOptional()
-  @IsString()
-  @MaxLength(255)
-  description: string;
-
-  @IsOptional()
-  @IsUUID()
-  productTypeId: string;
-
-  constructor(companyId: string, name: string, cost: number, price: number, hasFormula: boolean, elementList: ProductElementDto[], formulaList: ProductFormulaDto[], id?: string, description?: string, productTypeId?: string) {
+  constructor(companyId: string, name: string, cost: number, price: number, hasFormula: boolean, id?: string, productTypeId?: string, description?: string, imagenUrl?: string, elementList?: ProductElementDto[], formulaList?: ProductFormulaDto[]) {
     this.companyId = companyId;
     this.name = name;
     this.cost = cost;
@@ -54,8 +59,9 @@ export class ProductDto {
     this.elementList = elementList;
     this.formulaList = formulaList;
     this.id = id;
+    this.productTypeId = productTypeId;
     this.description = description;
-    productTypeId = productTypeId;
+    this.imagenUrl = imagenUrl;
   }
 }
 
