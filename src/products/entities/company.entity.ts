@@ -8,7 +8,7 @@ export class Company {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column('varchar', { length: 45, unique: true })
+  @Column('varchar', { length: 50, unique: true })
   name: string;
 
   @CreateDateColumn({ type: 'timestamp' })

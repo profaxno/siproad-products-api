@@ -7,8 +7,11 @@ export class Element {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column('varchar', { length: 45, unique: true })
+  @Column('varchar', { length: 50 })
   name: string;
+
+  @Column('varchar', { length: 100, nullable: true })
+  description: string;
 
   @Column('double')
   cost: number;
@@ -35,23 +38,23 @@ export class Element {
   )
   company: Company;
 
-  @OneToMany(
-    () => ProductElement,
-    (productElement) => productElement.element
-  )
-  productElement: ProductElement;
-
-  @OneToMany(
-    () => FormulaElement,
-    (formulaElement) => formulaElement.element
-  )
-  formulaElement: FormulaElement;
-
   @ManyToOne(
     () => ElementType,
     (elementType) => elementType.element,
     { eager: true }
   )
   elementType: ElementType;
+
+  @OneToMany(
+    () => ProductElement,
+    (productElement) => productElement.element
+  )
+  productElement: ProductElement[];
+
+  @OneToMany(
+    () => FormulaElement,
+    (formulaElement) => formulaElement.element
+  )
+  formulaElement: FormulaElement[];
 
 }

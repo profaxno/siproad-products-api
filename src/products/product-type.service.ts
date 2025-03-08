@@ -11,10 +11,11 @@ import { ProductType, Company } from './entities';
 
 import { CompanyService } from './company.service';
 import { AlreadyExistException, IsBeingUsedException } from '../common/exceptions/common.exception';
-import { DataReplicationService } from 'src/data-replication/data-replication.service';
+
+import { ProcessEnum, SourceEnum } from 'src/data-replication/enums';
 import { DataReplicationDto, MessageDto } from 'src/data-replication/dto/data-replication.dto';
-import { ProcessEnum, SourceEnum } from 'src/data-replication/enum';
 import { JsonBasic } from 'src/data-replication/interfaces/json-basic.interface';
+import { DataReplicationService } from 'src/data-replication/data-replication.service';
 
 @Injectable()
 export class ProductTypeService {
@@ -47,11 +48,11 @@ export class ProductTypeService {
       await this.update(dto)
       .then( () => {
         processSummaryDto.rowsOK++;
-        processSummaryDto.detailsRowsOK.push(`(${i++}) name=${dto.label}, message=OK`);
+        processSummaryDto.detailsRowsOK.push(`(${i++}) name=${dto.name}, message=OK`);
       })
       .catch(error => {
         processSummaryDto.rowsKO++;
-        processSummaryDto.detailsRowsKO.push(`(${i++}) name=${dto.label}, error=${error}`);
+        processSummaryDto.detailsRowsKO.push(`(${i++}) name=${dto.name}, error=${error}`);
       })
 
     }
@@ -87,7 +88,7 @@ export class ProductTypeService {
       return this.prepareEntity(entity, dto) // * prepare
       .then( (entity: ProductType) => this.save(entity) ) // * update
       .then( (entity: ProductType) => {
-        dto = new ProductTypeDto(entity.company.id, entity.label, entity.id); // * map to dto
+        dto = new ProductTypeDto(entity.company.id, entity.name, entity.id); // * map to dto
 
         // * replication data
         const messageDto = new MessageDto(SourceEnum.API_PRODUCTS, ProcessEnum.PRODUCT_TYPE_UPDATE, JSON.stringify(dto));
@@ -115,14 +116,14 @@ export class ProductTypeService {
     const start = performance.now();
 
     // * find productType
-    const inputDto: SearchInputDto = new SearchInputDto(undefined, [dto.label]);
+    const inputDto: SearchInputDto = new SearchInputDto(undefined, [dto.name]);
       
     return this.findByParams({}, inputDto, dto.companyId)
     .then( (entityList: ProductType[]) => {
 
       // * validate
       if(entityList.length > 0){
-        const msg = `productType already exists, name=${dto.label}`;
+        const msg = `productType already exists, name=${dto.name}`;
         this.logger.warn(`create: not executed (${msg})`);
         throw new AlreadyExistException(msg);
       }
@@ -133,7 +134,7 @@ export class ProductTypeService {
       return this.prepareEntity(entity, dto) // * prepare
       .then( (entity: ProductType) => this.save(entity) ) // * update
       .then( (entity: ProductType) => {
-        dto = new ProductTypeDto(entity.company.id, entity.label, entity.id); // * map to dto 
+        dto = new ProductTypeDto(entity.company.id, entity.name, entity.id); // * map to dto 
 
         // * replication data
         const messageDto = new MessageDto(SourceEnum.API_PRODUCTS, ProcessEnum.PRODUCT_TYPE_UPDATE, JSON.stringify(dto));
@@ -160,7 +161,7 @@ export class ProductTypeService {
     const start = performance.now();
 
     return this.findByParams(paginationDto, inputDto, companyId)
-    .then( (entityList: ProductType[]) => entityList.map( (entity: ProductType) => new ProductTypeDto(entity.company.id, entity.label, entity.id) ) )// * map entities to DTOs
+    .then( (entityList: ProductType[]) => entityList.map( (entity: ProductType) => new ProductTypeDto(entity.company.id, entity.name, entity.id) ) )// * map entities to DTOs
     .then( (dtoList: ProductTypeDto[]) => {
       
       if(dtoList.length == 0){
@@ -189,7 +190,7 @@ export class ProductTypeService {
     const inputDto: SearchInputDto = new SearchInputDto(id);
     
     return this.findByParams({}, inputDto, companyId)
-    .then( (entityList: ProductType[]) => entityList.map( (entity: ProductType) => new ProductTypeDto(entity.company.id, entity.label, entity.id) ) )// * map entities to DTOs
+    .then( (entityList: ProductType[]) => entityList.map( (entity: ProductType) => new ProductTypeDto(entity.company.id, entity.name, entity.id) ) )// * map entities to DTOs
     .then( (dtoList: ProductTypeDto[]) => {
       
       if(dtoList.length == 0){
@@ -228,11 +229,12 @@ export class ProductTypeService {
         throw new NotFoundException(msg);
       }
 
-      // * delete
+      // * delete: update field active
       const entity = entityList[0];
+      entity.active = false;
 
-      return this.productTypeRepository.delete(id)
-      .then( () => {
+      return this.save(entity)
+      .then( (entity: ProductType) => {
 
         // * replication data
         const jsonBasic: JsonBasic = { id: entity.id }
@@ -262,6 +264,41 @@ export class ProductTypeService {
 
   }
 
+  synchronize(companyId: string, paginationDto: SearchPaginationDto): Promise<string> {
+    this.logger.warn(`synchronize: starting process... companyId=${companyId}, paginationDto=${JSON.stringify(paginationDto)}`);
+
+    return this.findAll(paginationDto, companyId)
+    .then( (entityList: ProductType[]) => {
+      
+      if(entityList.length == 0){
+        const msg = 'executed';
+        this.logger.log(`synchronize: ${msg}`);
+        return msg;
+      }
+
+      const messageDtoList: MessageDto[] = entityList.map( value => {
+        const process = value.active ? ProcessEnum.PRODUCT_TYPE_UPDATE : ProcessEnum.PRODUCT_TYPE_DELETE;
+        const dto = new ProductTypeDto(value.company.id, value.name, value.id);
+        return new MessageDto(SourceEnum.API_PRODUCTS, process, JSON.stringify(dto));
+      });
+
+      const dataReplicationDto: DataReplicationDto = new DataReplicationDto(messageDtoList);
+            
+      return this.replicationService.sendMessages(dataReplicationDto)
+      .then( () => {
+        paginationDto.page++;
+        return this.synchronize(companyId, paginationDto);
+      })
+      
+    })
+    .catch( error => {
+      const msg = `not executed (unexpected error)`;
+      this.logger.error(`synchronize: ${msg}, paginationDto=${JSON.stringify(paginationDto)}`, error);
+      return msg;
+    })
+
+  }
+
   findByParams(paginationDto: SearchPaginationDto, inputDto: SearchInputDto, companyId?: string): Promise<ProductType[]> {
     const {page=1, limit=this.dbDefaultLimit} = paginationDto;
 
@@ -269,8 +306,8 @@ export class ProductTypeService {
     const value = inputDto.search
     if(value) {
       const whereById   = { id: value };
-      const whereByName = { company: { id: companyId}, label: Like(`%${value}%`) };
-      const where       = isUUID(value) ? whereById : whereByName;
+      const whereByLike = { company: { id: companyId}, name: Like(`%${value}%`) };
+      const where       = isUUID(value) ? whereById : whereByLike;
 
       return this.productTypeRepository.find({
         take: limit,
@@ -288,7 +325,7 @@ export class ProductTypeService {
           company: {
             id: companyId
           },
-          label: In(inputDto.searchList)
+          name: In(inputDto.searchList)
         }
       })
     }
@@ -321,7 +358,7 @@ export class ProductTypeService {
       }
 
       entity.company = companyList[0];
-      entity.label = dto.label.toUpperCase();
+      entity.name = dto.name.toUpperCase();
       
       return entity;
       
@@ -342,4 +379,20 @@ export class ProductTypeService {
     })
   }
   
+  private findAll(paginationDto: SearchPaginationDto, companyId: string): Promise<ProductType[]> {
+    const {page=1, limit=this.dbDefaultLimit} = paginationDto;
+
+    // * search all
+    return this.productTypeRepository.find({
+      take: limit,
+      skip: (page - 1) * limit,
+      where: {
+        company: { 
+          id: companyId 
+        }
+      }
+      
+    })
+    
+  }
 }

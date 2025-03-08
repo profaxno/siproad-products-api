@@ -7,7 +7,7 @@ export class CompanyDto {
   id?: string;
 
   @IsString()
-  @MaxLength(45)
+  @MaxLength(50)
   name: string;
 
   constructor(name: string, id?: string) {

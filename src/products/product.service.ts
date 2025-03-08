@@ -12,7 +12,7 @@ import { Product, ProductFormula, Formula, ProductElement, Element, Company, Pro
 import { FormulaService } from './formula.service';
 import { CompanyService } from './company.service';
 
-import { ProcessEnum, SourceEnum } from 'src/data-replication/enum';
+import { ProcessEnum, SourceEnum } from 'src/data-replication/enums';
 import { MessageDto, DataReplicationDto } from 'src/data-replication/dto/data-replication.dto';
 import { DataReplicationService } from 'src/data-replication/data-replication.service';
 
@@ -283,7 +283,7 @@ export class ProductService {
         const msg = `product not found, id=${id}`;
         this.logger.warn(`remove: not executed (${msg})`);
         throw new NotFoundException(msg);
-        //return new ResponseDto(HttpStatus.NOT_FOUND, msg);
+        //return new PfxHttpResponseDto(HttpStatus.NOT_FOUND, msg);
       }
       
       // * delete: update field active
@@ -302,7 +302,7 @@ export class ProductService {
         const end = performance.now();
         this.logger.log(`remove: OK, runtime=${(end - start) / 1000} seconds`);
         return 'deleted';
-        //return new ResponseDto(HttpStatus.OK, 'delete OK');
+        //return new PfxHttpResponseDto(HttpStatus.OK, 'delete OK');
       })
 
     })
@@ -314,7 +314,7 @@ export class ProductService {
         const msg = 'product is being used';
         this.logger.warn(`remove: not executed (${msg})`, error);
         throw new IsBeingUsedException(msg);
-        //return new ResponseDto(HttpStatus.BAD_REQUEST, 'product is being used');
+        //return new PfxHttpResponseDto(HttpStatus.BAD_REQUEST, 'product is being used');
       }
 
       this.logger.error('remove: error', error);
@@ -330,8 +330,8 @@ export class ProductService {
     const value = inputDto.search;
     if(value) {
       const whereById   = { id: value, active: true };
-      const whereByName = { company: { id: companyId }, name: Like(`%${value}%`), active: true };
-      const where       = isUUID(value) ? whereById : whereByName;
+      const whereByLike = { company: { id: companyId }, name: Like(`%${value}%`), active: true };
+      const where       = isUUID(value) ? whereById : whereByLike;
 
       return this.productRepository.find({
         take: limit,
@@ -382,19 +382,23 @@ export class ProductService {
   }
 
   synchronize(companyId: string, paginationDto: SearchPaginationDto): Promise<string> {
-    this.logger.warn(`synchronize: processing paginationDto=${JSON.stringify(paginationDto)}`);
+    this.logger.warn(`synchronize: starting process... companyId=${companyId}, paginationDto=${JSON.stringify(paginationDto)}`);
 
-    return this.findAllProducts(paginationDto, companyId)
-    .then( (productList: Product[]) => {
+    return this.findAll(paginationDto, companyId)
+    .then( (entityList: Product[]) => {
       
-      if(productList.length == 0){
-        const msg = `synchronization executed`;
+      if(entityList.length == 0){
+        const msg = 'executed';
         this.logger.log(`synchronize: ${msg}`);
         return msg;
       }
 
-      const productDtoList = productList.map( value => this.generateProductWithAssociationList(value, value.productElement, value.productFormula) );
-      const messageDtoList: MessageDto[] = productDtoList.map( (value: ProductDto) => new MessageDto(SourceEnum.API_PRODUCTS, ProcessEnum.PRODUCT_UPDATE, JSON.stringify(value)) );
+      const messageDtoList: MessageDto[] = entityList.map( value => {
+        const process = value.active ? ProcessEnum.PRODUCT_UPDATE : ProcessEnum.PRODUCT_DELETE;
+        const dto = new ProductDto(value.company.id, value.name, value.cost, value.price, value.hasFormula, value.id, value.productType?.id, value.description, value.imagenUrl);
+        return new MessageDto(SourceEnum.API_PRODUCTS, process, JSON.stringify(dto));
+      });
+
       const dataReplicationDto: DataReplicationDto = new DataReplicationDto(messageDtoList);
             
       return this.replicationService.sendMessages(dataReplicationDto)
@@ -631,7 +635,7 @@ export class ProductService {
     } 
 
     // * generate product dto
-    const productDto = new ProductDto(product.company.id, product.name, cost, product.price, product.hasFormula, product.id, product.productType.id, product.description, product.urlImagen, productElementDtoList, []);
+    const productDto = new ProductDto(product.company.id, product.name, cost, product.price, product.hasFormula, product.id, product.productType?.id, product.description, product.imagenUrl, productElementDtoList, []);
 
     return productDto;
   }
@@ -662,12 +666,12 @@ export class ProductService {
     }
 
     // * generate product dto
-    const productDto = new ProductDto(product.company.id, product.name, cost, product.price, product.hasFormula, product.id, product.productType.id, product.description, product.urlImagen, [], productFormulaDtoList);
+    const productDto = new ProductDto(product.company.id, product.name, cost, product.price, product.hasFormula, product.id, product.productType?.id, product.description, product.imagenUrl, [], productFormulaDtoList);
 
     return productDto;
   }
 
-  private findAllProducts(paginationDto: SearchPaginationDto, companyId: string): Promise<Product[]> {
+  private findAll(paginationDto: SearchPaginationDto, companyId: string): Promise<Product[]> {
     const {page=1, limit=this.dbDefaultLimit} = paginationDto;
 
     // * search all
@@ -680,6 +684,7 @@ export class ProductService {
         }
       },
       relations: {
+        productType   : true,
         productElement: true,
         productFormula: true
       }

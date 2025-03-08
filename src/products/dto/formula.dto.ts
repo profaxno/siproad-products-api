@@ -11,7 +11,7 @@ export class FormulaDto {
   companyId: string;
 
   @IsString()
-  @MaxLength(45)
+  @MaxLength(50)
   name: string;
   
   @IsNumber()

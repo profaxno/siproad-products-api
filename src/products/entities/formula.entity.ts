@@ -7,7 +7,7 @@ export class Formula {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column('varchar', { length: 45, unique: true })
+  @Column('varchar', { length: 50 })
   name: string;
 
   @Column('double')

@@ -7,8 +7,11 @@ export class ProductType {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column('varchar', { length: 45, unique: true })
-  label: string;
+  @Column('varchar', { length: 50 })
+  name: string;
+
+  @Column('boolean', { default: true })
+  active: boolean
 
   @ManyToOne(
     () => Company,

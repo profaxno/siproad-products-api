@@ -1,5 +1,5 @@
 import { IsBoolean, IsIn, IsInt, IsNumber, IsOptional, IsPositive, IsString, IsUUID, MaxLength } from "class-validator";
-import { MeasuresEnum } from "../enum/measures.enum";
+import { MeasuresEnum } from "../enums/measures.enum";
 
 export class ElementDto {
   
@@ -15,7 +15,7 @@ export class ElementDto {
   elementTypeId?: string;
 
   @IsString()
-  @MaxLength(45)
+  @MaxLength(50)
   name: string;
 
   @IsNumber()

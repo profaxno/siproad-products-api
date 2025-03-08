@@ -4,7 +4,7 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 import { MessageDto, DataReplicationDto } from './dto/data-replication.dto';
-import { SourceEnum } from './enum';
+import { ProcessEnum, SourceEnum } from './enums';
 
 import { SNSClient, PublishCommand } from "@aws-sdk/client-sns";
 import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs";
@@ -33,7 +33,6 @@ export class DataReplicationService {
     this.awsRegion            = this.configService.get('awsRegion');
     this.awsAccessKeyId       = this.configService.get('awsAccessKeyId');
     this.awsSecretAccessKey   = this.configService.get('awsSecretAccessKey');
-    this.adminSnsTopicArn     = this.configService.get('adminSnsTopicArn');
     this.productsSnsTopicArn  = this.configService.get('productsSnsTopicArn');
 
     // * configure SNS client
@@ -88,22 +87,12 @@ export class DataReplicationService {
 
   private sendMessage(messageDto: MessageDto): Promise<string> {
     
-    if(messageDto.source == SourceEnum.API_ADMIN){
-      
-      const command = new PublishCommand({
-        TopicArn: this.adminSnsTopicArn,
-        Message: JSON.stringify(messageDto)
-      })
-  
-      this.logger.log(`sendMessage: command=${JSON.stringify(command)}`);
-      return this.snsClient.send(command)
-      .then( (result: any) => {
-        return `message sent, messageId=${result.MessageId}`;
-      })
-
-    }
-
-    if(messageDto.source == SourceEnum.API_PRODUCTS){
+    if(
+      messageDto.process == ProcessEnum.PRODUCT_TYPE_UPDATE ||
+      messageDto.process == ProcessEnum.PRODUCT_TYPE_DELETE ||
+      messageDto.process == ProcessEnum.PRODUCT_UPDATE ||
+      messageDto.process == ProcessEnum.PRODUCT_DELETE
+    ){
 
       const command = new PublishCommand({
         TopicArn: this.productsSnsTopicArn,
@@ -111,6 +100,7 @@ export class DataReplicationService {
       })
   
       this.logger.log(`sendMessage: command=${JSON.stringify(command)}`);
+      
       return this.snsClient.send(command)
       .then( (result: any) => {
         return `message sent, messageId=${result.MessageId}`;
@@ -118,7 +108,7 @@ export class DataReplicationService {
 
     }
 
-    throw new Error(`source not implement, source=${messageDto.source}`);
+    throw new Error(`process not implement, process=${messageDto.process}`);
 
   }
 

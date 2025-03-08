@@ -8,6 +8,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 
 import { CompanyDto } from './dto/company.dto';
 import { Company } from './entities/company.entity';
+
 import { AlreadyExistException, IsBeingUsedException } from '../common/exceptions/common.exception';
 
 @Injectable()
@@ -89,7 +90,7 @@ export class CompanyService {
       // * create
       let entity = new Company();
       entity.id = dto.id ? dto.id : undefined;
-      entity.name = dto.name.toUpperCase()
+      entity.name = dto.name.toUpperCase();
       
       return this.save(entity)
       .then( (entity: Company) => {
@@ -182,9 +183,13 @@ export class CompanyService {
         throw new NotFoundException(msg);
       }
 
-      // * delete
-      return this.companyRepository.delete(id)
-      .then( () => {
+      // * delete: update field active
+      const entity = entityList[0];
+      entity.active = false;
+
+      return this.save(entity)
+      .then( (entity: Company) => {
+
         const end = performance.now();
         this.logger.log(`remove: OK, runtime=${(end - start) / 1000} seconds`);
         return 'deleted';
@@ -214,8 +219,8 @@ export class CompanyService {
     const value = inputDto.search;
     if(value) {
       const whereById   = { id: value, active: true };
-      const whereByName = { name: Like(`%${value}%`), active: true };
-      const where       = isUUID(value) ? whereById : whereByName;
+      const whereByLike = { name: Like(`%${value}%`), active: true };
+      const where       = isUUID(value) ? whereById : whereByLike;
 
       return this.companyRepository.find({
         take: limit,

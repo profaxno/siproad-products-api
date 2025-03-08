@@ -10,12 +10,12 @@ export class ProductTypeDto {
   companyId: string;
 
   @IsString()
-  @MaxLength(45)
-  label: string;
+  @MaxLength(50)
+  name: string;
 
-  constructor(companyId: string, label: string, id?: string) {
+  constructor(companyId: string, name: string, id?: string) {
     this.companyId = companyId;
-    this.label = label;
+    this.name = name;
     this.id = id;
   }
 }

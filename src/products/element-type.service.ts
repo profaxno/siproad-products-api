@@ -10,6 +10,7 @@ import { ElementTypeDto } from './dto/element-type.dto';
 import { ElementType, Company } from './entities';
 
 import { CompanyService } from './company.service';
+
 import { AlreadyExistException, IsBeingUsedException } from '../common/exceptions/common.exception';
 
 @Injectable()
@@ -42,11 +43,11 @@ export class ElementTypeService {
       await this.update(dto)
       .then( () => {
         processSummaryDto.rowsOK++;
-        processSummaryDto.detailsRowsOK.push(`(${i++}) name=${dto.label}, message=OK`);
+        processSummaryDto.detailsRowsOK.push(`(${i++}) name=${dto.name}, message=OK`);
       })
       .catch(error => {
         processSummaryDto.rowsKO++;
-        processSummaryDto.detailsRowsKO.push(`(${i++}) name=${dto.label}, error=${error}`);
+        processSummaryDto.detailsRowsKO.push(`(${i++}) name=${dto.name}, error=${error}`);
       })
 
     }
@@ -82,7 +83,7 @@ export class ElementTypeService {
       return this.prepareEntity(entity, dto) // * prepare
       .then( (entity: ElementType) => this.save(entity) ) // * update
       .then( (entity: ElementType) => {
-        dto = new ElementTypeDto(entity.company.id, entity.label, entity.id); // * map to dto
+        dto = new ElementTypeDto(entity.company.id, entity.name, entity.id); // * map to dto
 
         const end = performance.now();
         this.logger.log(`update: executed, runtime=${(end - start) / 1000} seconds`);
@@ -105,14 +106,14 @@ export class ElementTypeService {
     const start = performance.now();
 
     // * find elementType
-    const inputDto: SearchInputDto = new SearchInputDto(undefined, [dto.label]);
+    const inputDto: SearchInputDto = new SearchInputDto(undefined, [dto.name]);
       
     return this.findByParams({}, inputDto, dto.companyId)
     .then( (entityList: ElementType[]) => {
 
       // * validate
       if(entityList.length > 0){
-        const msg = `elementType already exists, name=${dto.label}`;
+        const msg = `elementType already exists, name=${dto.name}`;
         this.logger.warn(`create: not executed (${msg})`);
         throw new AlreadyExistException(msg);
       }
@@ -123,7 +124,7 @@ export class ElementTypeService {
       return this.prepareEntity(entity, dto) // * prepare
       .then( (entity: ElementType) => this.save(entity) ) // * update
       .then( (entity: ElementType) => {
-        dto = new ElementTypeDto(entity.company.id, entity.label, entity.id); // * map to dto 
+        dto = new ElementTypeDto(entity.company.id, entity.name, entity.id); // * map to dto 
 
         const end = performance.now();
         this.logger.log(`create: OK, runtime=${(end - start) / 1000} seconds`);
@@ -145,7 +146,7 @@ export class ElementTypeService {
     const start = performance.now();
 
     return this.findByParams(paginationDto, inputDto, companyId)
-    .then( (entityList: ElementType[]) => entityList.map( (entity: ElementType) => new ElementTypeDto(entity.company.id, entity.label, entity.id) ) )// * map entities to DTOs
+    .then( (entityList: ElementType[]) => entityList.map( (entity: ElementType) => new ElementTypeDto(entity.company.id, entity.name, entity.id) ) )// * map entities to DTOs
     .then( (dtoList: ElementTypeDto[]) => {
       
       if(dtoList.length == 0){
@@ -174,7 +175,7 @@ export class ElementTypeService {
     const inputDto: SearchInputDto = new SearchInputDto(id);
     
     return this.findByParams({}, inputDto, companyId)
-    .then( (entityList: ElementType[]) => entityList.map( (entity: ElementType) => new ElementTypeDto(entity.company.id, entity.label, entity.id) ) )// * map entities to DTOs
+    .then( (entityList: ElementType[]) => entityList.map( (entity: ElementType) => new ElementTypeDto(entity.company.id, entity.name, entity.id) ) )// * map entities to DTOs
     .then( (dtoList: ElementTypeDto[]) => {
       
       if(dtoList.length == 0){
@@ -213,9 +214,13 @@ export class ElementTypeService {
         throw new NotFoundException(msg);
       }
 
-      // * delete
-      return this.elementTypeRepository.delete(id)
-      .then( () => {
+      // * delete: update field active
+      const entity = entityList[0];
+      entity.active = false;
+
+      return this.save(entity)
+      .then( (entity: ElementType) => {
+
         const end = performance.now();
         this.logger.log(`remove: OK, runtime=${(end - start) / 1000} seconds`);
         return 'deleted';
@@ -245,8 +250,8 @@ export class ElementTypeService {
     const value = inputDto.search;
     if(value) {
       const whereById   = { id: value };
-      const whereByName = { company: { id: companyId}, label: Like(`%${value}%`) };
-      const where       = isUUID(value) ? whereById : whereByName;
+      const whereByLike = { company: { id: companyId}, name: Like(`%${value}%`) };
+      const where       = isUUID(value) ? whereById : whereByLike;
 
       return this.elementTypeRepository.find({
         take: limit,
@@ -264,7 +269,7 @@ export class ElementTypeService {
           company: {
             id: companyId
           },
-          label: In(inputDto.searchList)
+          name: In(inputDto.searchList)
         }
       })
     }
@@ -297,7 +302,7 @@ export class ElementTypeService {
       }
 
       entity.company = companyList[0];
-      entity.label = dto.label.toUpperCase();
+      entity.name = dto.name.toUpperCase();
       
       return entity;
       

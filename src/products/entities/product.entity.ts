@@ -7,10 +7,10 @@ export class Product {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column('varchar', { length: 45, unique: true })
+  @Column('varchar', { length: 50 })
   name: string;
 
-  @Column('varchar', { length: 255, nullable: true })
+  @Column('varchar', { length: 100, nullable: true })
   description: string;
 
   @Column('double')
@@ -20,7 +20,7 @@ export class Product {
   price: number;
 
   @Column('varchar', { length: 255, nullable: true })
-  urlImagen: string;
+  imagenUrl: string;
 
   @Column('boolean', { default: false })
   hasFormula: boolean
@@ -41,9 +41,16 @@ export class Product {
   )
   company: Company;
 
+  @ManyToOne(
+    () => ProductType,
+    (productType) => productType.product,
+    { eager: true }
+  )
+  productType: ProductType;
+  
   @OneToMany(
     () => ProductElement,
-    (productFormula) => productFormula.product,
+    (productElement) => productElement.product,
     { eager: true }
   )
   productElement: ProductElement[];
@@ -54,12 +61,5 @@ export class Product {
     { eager: true }
   )
   productFormula: ProductFormula[];
-
-  @ManyToOne(
-    () => ProductType,
-    (productType) => productType.product,
-    { eager: true }
-  )
-  productType: ProductType;
 
 }

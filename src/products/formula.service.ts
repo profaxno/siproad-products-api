@@ -228,9 +228,13 @@ export class FormulaService {
         throw new NotFoundException(msg);
       }
 
-      // * delete
-      return this.formulaRepository.delete(id) // * delete formula and formulaElement on cascade
-      .then( () => {
+      // * delete: update field active
+      const entity = entityList[0];
+      entity.active = false;
+
+      return this.save(entity)
+      .then( (entity: Formula) => {
+        
         const end = performance.now();
         this.logger.log(`remove: OK, runtime=${(end - start) / 1000} seconds`);
         return 'deleted';
@@ -285,8 +289,8 @@ export class FormulaService {
     const value = inputDto.search;
     if(value) {
       const whereById   = { id: value, active: true };
-      const whereByName = { company: { id: companyId }, name: Like(`%${value}%`), active: true };
-      const where       = isUUID(value) ? whereById : whereByName;
+      const whereByLike = { company: { id: companyId }, name: Like(`%${value}%`), active: true };
+      const where       = isUUID(value) ? whereById : whereByLike;
 
       return this.formulaRepository.find({
         take: limit,
@@ -324,7 +328,8 @@ export class FormulaService {
         company: { 
           id: companyId 
         },
-        active: true },
+        active: true 
+      },
       relations: {
         formulaElement: true
       }

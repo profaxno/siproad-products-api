@@ -10,6 +10,7 @@ import { ElementDto } from './dto/element.dto';
 import { Element, Company } from './entities';
 
 import { CompanyService } from './company.service';
+
 import { AlreadyExistException, IsBeingUsedException } from '../common/exceptions/common.exception';
 
 @Injectable()
@@ -213,9 +214,13 @@ export class ElementService {
         throw new NotFoundException(msg);
       }
 
-      // * delete
-      return this.elementRepository.delete(id)
-      .then( () => {
+      // * delete: update field active
+      const entity = entityList[0];
+      entity.active = false;
+
+      return this.save(entity)
+      .then( (entity: Element) => {
+      
         const end = performance.now();
         this.logger.log(`remove: OK, runtime=${(end - start) / 1000} seconds`);
         return 'deleted';
@@ -272,8 +277,8 @@ export class ElementService {
     const value = inputDto.search;
     if(value) {
       const whereById   = { id: value, active: true };
-      const whereByName = { company: { id: companyId}, name: Like(`%${value}%`), active: true };
-      const where       = isUUID(value) ? whereById : whereByName;
+      const whereByLike = { company: { id: companyId}, name: Like(`%${value}%`), active: true };
+      const where       = isUUID(value) ? whereById : whereByLike;
 
       return this.elementRepository.find({
         take: limit,
