@@ -1,4 +1,4 @@
-import { In, InsertResult, Like, Repository } from 'typeorm';
+import { In, InsertResult, Like, Raw, Repository } from 'typeorm';
 import { isUUID } from 'class-validator';
 import { ProcessSummaryDto, SearchInputDto, SearchPaginationDto } from 'profaxnojs/util';
 
@@ -272,11 +272,19 @@ export class FormulaService {
         throw new NotFoundException(msg);
       }
 
-      entity.company = companyList[0];
-      entity.name = dto.name.toUpperCase();
-      entity.cost = dto.cost;
+      // * calculate cost
+      return this.calculateFormulaCost(dto)
+      .then( (cost: number) => {
 
-      return entity;
+        // * prepare entity
+        entity.company  = companyList[0];
+        entity.name     = dto.name.toUpperCase();
+        entity.cost     = dto.cost;
+        entity.cost     = cost; // TODO: crear manual cost
+  
+        return entity;
+
+      })
       
     })
     
@@ -288,9 +296,9 @@ export class FormulaService {
     // * search by id or partial value
     const value = inputDto.search;
     if(value) {
-      const whereById   = { id: value, active: true };
-      const whereByLike = { company: { id: companyId }, name: Like(`%${value}%`), active: true };
-      const where       = isUUID(value) ? whereById : whereByLike;
+      const whereById     = { id: value, active: true };
+      const whereByValue  = { company: { id: companyId }, name: value, active: true };
+      const where = isUUID(value) ? whereById : whereByValue;
 
       return this.formulaRepository.find({
         take: limit,
@@ -311,8 +319,9 @@ export class FormulaService {
           company: { 
             id: companyId 
           },
-          name: In(inputDto.searchList),
-          active: true,
+          name: Raw( (fieldName) => inputDto.searchList.map(value => `${fieldName} LIKE '%${value}%'`).join(' OR ') ),
+          // name: In(inputDto.searchList),
+          active: true
         },
         relations: {
           formulaElement: true
@@ -427,19 +436,53 @@ export class FormulaService {
   generateFormulaWithElementList(formula: Formula, formulaElementList: FormulaElement[]): FormulaDto {
     
     let formulaElementDtoList: FormulaElementDto[] = [];
-    let cost: number = formula.cost;
+    let cost: number = formula.cost ? formula.cost : 0/*formula.manualCost*/; // TODO: crear manual cost
 
     if(formulaElementList.length > 0){
       formulaElementDtoList = formulaElementList.map( (formulaElement: FormulaElement) => new FormulaElementDto(formulaElement.element.id, formulaElement.qty, formulaElement.element.name, formulaElement.element.cost, formulaElement.element.unit) );
       
       // * calculate cost
-      cost = formulaElementDtoList.reduce( (cost, formulaElementDto) => cost + (formulaElementDto.qty * formulaElementDto.cost), 0);
+      //cost = this.calculateElementsCost(formulaElementList); // formulaElementDtoList.reduce( (cost, formulaElementDto) => cost + (formulaElementDto.qty * formulaElementDto.cost), 0);
     } 
 
     // * generate formula dto
     const formulaDto = new FormulaDto(formula.company.id, formula.name, cost, formula.id, formulaElementDtoList);
 
     return formulaDto;
+  }
+
+  private calculateElementsCost(list: FormulaElement[]): number{
+  
+    const cost = list.reduce( (acc, dto) => {
+      acc += dto.qty * dto.element.cost;
+      return acc;
+    }, 0);
+
+    return cost;
+  }
+
+  private calculateFormulaCost(dto: FormulaDto): Promise<number>{
+
+    // * find elements by id
+    const idList = dto.elementList.map( (item) => item.id );
+
+    return this.elementRepository.findBy({ // TODO: Posiblemente aca deberia utilizarse el servicio y no el repositorio
+      id: In(idList),
+    })
+    .then( (entityList: Element[]) => {
+      
+      // * calculate cost
+      const formulaElementList: FormulaElement[] = entityList.map( (item) => {
+        const entity = new FormulaElement();
+        entity.element = item;
+        entity.qty;
+        return entity;
+      });
+
+      const cost = formulaElementList.reduce( (acc, dto) => acc + (dto.qty * dto.element.cost), 0);
+      return cost;
+    })
+
   }
 
 }

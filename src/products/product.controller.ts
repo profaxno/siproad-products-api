@@ -88,8 +88,8 @@ export class ProductController {
     })
   }
 
-  @Get('/findOneById/:companyId/:id')
-  findOneById(@Param('id') id: string): Promise<PfxHttpResponseDto> {
+  @Get('/findOneById/:id')
+  findOneById(@Param('id', ParseUUIDPipe) id: string): Promise<PfxHttpResponseDto> {
     this.logger.log(`>>> findOneById: id=${id}`);
     const start = performance.now();
 

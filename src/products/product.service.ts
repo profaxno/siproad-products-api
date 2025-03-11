@@ -1,4 +1,4 @@
-import { In, InsertResult, Like, Repository } from 'typeorm';
+import { In, InsertResult, Like, Raw, Repository } from 'typeorm';
 import { isUUID } from 'class-validator';
 import { ProcessSummaryDto, SearchInputDto, SearchPaginationDto } from 'profaxnojs/util';
 
@@ -7,7 +7,7 @@ import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 
 import { ProductDto, ProductFormulaDto, ProductElementDto } from './dto/product.dto';
-import { Product, ProductFormula, Formula, ProductElement, Element, Company, ProductType } from './entities';
+import { Product, ProductFormula, Formula, ProductElement, Element, Company, ProductType, FormulaElement } from './entities';
 
 import { FormulaService } from './formula.service';
 import { CompanyService } from './company.service';
@@ -19,6 +19,7 @@ import { DataReplicationService } from 'src/data-replication/data-replication.se
 import { AlreadyExistException, IsBeingUsedException } from '../common/exceptions/common.exception';
 import { ProductTypeService } from './product-type.service';
 import { JsonBasic } from 'src/data-replication/interfaces/json-basic.interface';
+
 
 @Injectable()
 export class ProductService {
@@ -329,9 +330,9 @@ export class ProductService {
     // * search by id or partial value
     const value = inputDto.search;
     if(value) {
-      const whereById   = { id: value, active: true };
-      const whereByLike = { company: { id: companyId }, name: Like(`%${value}%`), active: true };
-      const where       = isUUID(value) ? whereById : whereByLike;
+      const whereById     = { id: value, active: true };
+      const whereByValue  = { company: { id: companyId }, name: value, active: true };
+      const where = isUUID(value) ? whereById : whereByValue;
 
       return this.productRepository.find({
         take: limit,
@@ -353,8 +354,9 @@ export class ProductService {
           company: { 
             id: companyId 
           },
-          name: In(inputDto.searchList),
-          active: true,
+          name: Raw( (fieldName) => inputDto.searchList.map(value => `${fieldName} LIKE '%${value}%'`).join(' OR ') ),
+          // name: In(inputDto.searchList),
+          active: true
         },
         relations: {
           productElement: true,
@@ -436,15 +438,21 @@ export class ProductService {
       return this.productTypeService.findByParams({}, inputDto, dto.companyId)
       .then( (productTypeList: ProductType[]) => {
         
-        entity.company      = companyList[0];
-        entity.name         = dto.name.toUpperCase();
-        entity.description  = dto.description.toUpperCase();
-        entity.cost         = dto.cost;
-        entity.price        = dto.price;
-        entity.hasFormula   = dto.hasFormula;
-        entity.productType  = productTypeList.length > 0 ? productTypeList[0] : undefined;
+        // * calculate cost
+        return this.calculateProductCost(dto)
+        .then( (cost: number) => {
 
-        return entity;
+          entity.company      = companyList[0];
+          entity.name         = dto.name.toUpperCase();
+          entity.description  = dto.description?.toUpperCase();
+          entity.cost         = cost; // TODO: falta crear campo manual cost
+          entity.price        = dto.price;
+          entity.hasFormula   = dto.hasFormula;
+          entity.productType  = productTypeList.length > 0 ? productTypeList[0] : undefined;
+
+          return entity;
+        })
+
       })
 
     })
@@ -464,6 +472,62 @@ export class ProductService {
     })
   }
 
+  private findAll(paginationDto: SearchPaginationDto, companyId: string): Promise<Product[]> {
+    const {page=1, limit=this.dbDefaultLimit} = paginationDto;
+
+    // * search all
+    return this.productRepository.find({
+      take: limit,
+      skip: (page - 1) * limit,
+      where: {
+        company: { 
+          id: companyId 
+        }
+      },
+      relations: {
+        productType   : true,
+        productElement: true,
+        productFormula: true
+      }
+      
+    })
+    
+  }
+
+  private findProductsByCategory(paginationDto: SearchPaginationDto, companyId: string, categoryId: string): Promise<Product[]> {
+    const {page=1, limit=this.dbDefaultLimit} = paginationDto;
+    
+    return this.productRepository.find({
+      take: limit,
+      skip: (page - 1) * limit,
+      where: {
+        company: { 
+          id: companyId 
+        },
+        productType: {
+          id: categoryId
+        },
+        active: true,
+      },
+      relations: {
+        productElement: true,
+        productFormula: true
+      }
+    })
+    
+  }
+
+  private generateProductWithAssociationList(product: Product, productElementList?: ProductElement[], productFormulaList?: ProductFormula[]): ProductDto {
+    
+    if(product.hasFormula){
+      return this.generateProductWithFormulaList(product, productFormulaList);
+    } else {
+      return this.generateProductWithElementList(product, productElementList);
+    }
+
+  }
+
+  // * product with element
   private updateProductElement(product: Product, productElementDtoList: ProductElementDto[] = []): Promise<ProductElement[] | ProductFormula[]> {
     this.logger.log(`updateProductElement: starting process... product=${JSON.stringify(product)}, productElementDtoList=${JSON.stringify(productElementDtoList)}`);
     const start = performance.now();
@@ -498,7 +562,7 @@ export class ProductService {
           const productElement = new ProductElement();
           productElement.product = product;
           productElement.element = element;
-          productElement.qty = productElementDtoList.find( (elementDto) => elementDto.id == element.id).qty;
+          productElement.qty = productElementDtoList.find( (value) => value.id == element.id).qty;
           return productElement;
         })
   
@@ -538,6 +602,35 @@ export class ProductService {
     })
   }
   
+  private generateProductWithElementList(product: Product, productElementList: ProductElement[]): ProductDto {
+
+    let productElementDtoList: ProductElementDto[] = [];
+    let cost: number = product.cost ? product.cost : 0 /*product.manualCost*/; // TODO: crear manual cost
+
+    if(productElementList.length > 0){
+      productElementDtoList = productElementList.map( (productElement: ProductElement) => new ProductElementDto(productElement.element.id, productElement.qty, productElement.element.name, productElement.element.cost, productElement.element.unit) );
+      
+      // // * calculate cost
+      // cost = this.calculateElementsCost(productElementList); //productElementDtoList.reduce( (acc, dto) => acc + (dto.qty * dto.cost), 0);
+    }
+
+    // * generate product dto
+    const productDto = new ProductDto(product.company.id, product.name, product.cost, product.price, product.hasFormula, product.id, product.productType?.id, product.description, product.imagenUrl/*, product.active*/, productElementDtoList, []);
+
+    return productDto;
+  }
+
+  private calculateElementsCost(list: FormulaElement[] | ProductElement[]): number{
+
+    const cost = list.reduce( (acc, dto) => {
+      acc += dto.qty * dto.element.cost;
+      return acc;
+    }, 0);
+
+    return cost;
+  }
+
+  // * product with formula
   private updateProductFormula(product: Product, productFormulaDtoList: ProductFormulaDto[] = []): Promise<ProductFormula[] | ProductElement[]> {
     this.logger.log(`updateProductFormula: starting process... product=${JSON.stringify(product)}, productFormulaDtoList=${JSON.stringify(productFormulaDtoList)}`);
     const start = performance.now();
@@ -612,34 +705,6 @@ export class ProductService {
     })
   }
 
-  private generateProductWithAssociationList(product: Product, productElementList?: ProductElement[], productFormulaList?: ProductFormula[]): ProductDto {
-    
-    if(product.hasFormula){
-      return this.generateProductWithFormulaList(product, productFormulaList);
-    } else {
-      return this.generateProductWithElementList(product, productElementList);
-    }
-
-  }
-
-  private generateProductWithElementList(product: Product, productElementList: ProductElement[]): ProductDto {
-
-    let productElementDtoList: ProductElementDto[] = [];
-    let cost: number = product.cost;
-
-    if(productElementList.length > 0){
-      productElementDtoList = productElementList.map( (productElement: ProductElement) => new ProductElementDto(productElement.element.id, productElement.qty, productElement.element.name, productElement.element.cost, productElement.element.unit) );
-      
-      // * calculate cost
-      cost = productElementDtoList.reduce( (cost, productElementDto) => cost + (productElementDto.qty * productElementDto.cost), 0);
-    } 
-
-    // * generate product dto
-    const productDto = new ProductDto(product.company.id, product.name, cost, product.price, product.hasFormula, product.id, product.productType?.id, product.description, product.imagenUrl, productElementDtoList, []);
-
-    return productDto;
-  }
-
   private generateProductWithFormulaList(product: Product, productFormulaList: ProductFormula[]): ProductDto {
     
     let productFormulaDtoList: ProductFormulaDto[] = [];
@@ -648,72 +713,108 @@ export class ProductService {
     if(productFormulaList.length > 0){
 
       productFormulaDtoList = productFormulaList.map( (productFormula: ProductFormula) => {
-        const formulaDto = this.formulaService.generateFormulaWithElementList(productFormula.formula, productFormula.formula.formulaElement);
-        
-        // * update quantity of each ingredient
-        formulaDto.elementList = formulaDto.elementList.map( (elementDto) => {
-          elementDto.qty = elementDto.qty * productFormula.qty;
-          return elementDto;
-        } );
-
-        // * update formula cost
-        const formulaCost = formulaDto.cost * productFormula.qty;
-        return new ProductFormulaDto(formulaDto.id, productFormula.qty, formulaDto.name, formulaCost, formulaDto.elementList);
+        const formula = productFormula.formula;
+        const formulaDto = this.formulaService.generateFormulaWithElementList(formula, formula.formulaElement);
+        const productFormulaCost = productFormula.qty * formulaDto.cost;
+        return new ProductFormulaDto(formulaDto.id, productFormula.qty, formulaDto.name, productFormulaCost, formulaDto.elementList);
       });
-      
-      // * calculate cost
-      cost = productFormulaDtoList.reduce( (cost, productFormulaDto) => cost + (productFormulaDto.cost), 0);
+
     }
 
+    // if(productFormulaList.length > 0){
+
+    //   productFormulaDtoList = productFormulaList.map( (productFormula: ProductFormula) => {
+    //     const formulaDto = this.formulaService.generateFormulaWithElementList(productFormula.formula, productFormula.formula.formulaElement);
+        
+    //     // * update quantity of each ingredient
+    //     formulaDto.elementList = formulaDto.elementList.map( (elementDto) => {
+    //       elementDto.qty = elementDto.qty * productFormula.qty;
+    //       return elementDto;
+    //     } );
+
+    //     // * update formula cost
+    //     const formulaCost = formulaDto.cost * productFormula.qty;
+    //     return new ProductFormulaDto(formulaDto.id, productFormula.qty, formulaDto.name, formulaCost, formulaDto.elementList);
+    //   });
+      
+      
+    //   // * calculate cost
+    //   cost = productFormulaDtoList.reduce( (acc, dto) => acc + (dto.cost), 0);
+    // }
+
     // * generate product dto
-    const productDto = new ProductDto(product.company.id, product.name, cost, product.price, product.hasFormula, product.id, product.productType?.id, product.description, product.imagenUrl, [], productFormulaDtoList);
+    
+    const productDto = new ProductDto(product.company.id, product.name, product.cost, product.price, product.hasFormula, product.id, product.productType?.id, product.description, product.imagenUrl/*, product.active*/, [], productFormulaDtoList);
 
     return productDto;
   }
 
-  private findAll(paginationDto: SearchPaginationDto, companyId: string): Promise<Product[]> {
-    const {page=1, limit=this.dbDefaultLimit} = paginationDto;
+  // private calculateFormulasCost(productFormulaList: ProductFormula[]): number{
 
-    // * search all
-    return this.productRepository.find({
-      take: limit,
-      skip: (page - 1) * limit,
-      where: {
-        company: { 
-          id: companyId 
-        }
-      },
-      relations: {
-        productType   : true,
-        productElement: true,
-        productFormula: true
-      }
+  //   const cost = productFormulaList.reduce( (acc, dto) => {
+  //     const formulaElementList = dto.formula.formulaElement;
       
-    })
-    
-  }
+  //     acc += dto.qty * this.calculateElementsCost(formulaElementList);
+  //     return acc;
+  //   }, 0);
 
-  private findProductsByCategory(paginationDto: SearchPaginationDto, companyId: string, categoryId: string): Promise<Product[]> {
-    const {page=1, limit=this.dbDefaultLimit} = paginationDto;
+  //   return cost;
+  // }
+
+  private calculateProductCost(dto: ProductDto): Promise<number>{
+
+    if(dto.hasFormula){
+
+      // * find formula by id
+      const idList = dto.formulaList.map( (item) => item.id );
+
+      return this.formulaRepository.findBy({ // TODO: Posiblemente aca deberia utilizarse el servicio y no el repositorio
+        id: In(idList),
+      })
+      .then( (entityList: Formula[]) => {
+        
+        // * calculate cost
+        const productFormulaList: ProductFormula[] = entityList.map( (item) => {
+          const productFormulaDto = dto.formulaList.find( (value) => value.id == item.id);
+
+          const entity = new ProductFormula();
+          entity.formula = item;
+          entity.qty = productFormulaDto.qty;
+          return entity;
+        });
+
+        const cost = productFormulaList.reduce( (acc, dto) => acc + (dto.qty * dto.formula.cost), 0);
+        return cost;
+      })
+
+    } else {
+
+      // * find elements by id
+      const idList = dto.elementList.map( (item) => item.id );
+
+      return this.elementRepository.findBy({ // TODO: Posiblemente aca deberia utilizarse el servicio y no el repositorio
+        id: In(idList),
+      })
+      .then( (entityList: Element[]) => {
+        
+        // * calculate cost
+        const formulaElementList: FormulaElement[] = entityList.map( (item) => {
+          const productElementDto = dto.elementList.find( (value) => value.id == item.id);
+
+          const entity = new FormulaElement();
+          entity.element = item;
+          entity.qty = productElementDto.qty;
+          return entity;
+        });
+
+        const cost = formulaElementList.reduce( (acc, dto) => acc + (dto.qty * dto.element.cost), 0);
+        return cost;
+      })
+
+    }
+
     
-    return this.productRepository.find({
-      take: limit,
-      skip: (page - 1) * limit,
-      where: {
-        company: { 
-          id: companyId 
-        },
-        productType: {
-          id: categoryId
-        },
-        active: true,
-      },
-      relations: {
-        productElement: true,
-        productFormula: true
-      }
-    })
-    
+
   }
 
 }

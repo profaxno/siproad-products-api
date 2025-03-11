@@ -38,6 +38,10 @@ export class ProductDto {
   @IsBoolean()
   hasFormula: boolean;
 
+  // @IsOptional()
+  // @IsBoolean()
+  // active: boolean;
+
   @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })
@@ -50,18 +54,19 @@ export class ProductDto {
   @Type(() => ProductFormulaDto)
   formulaList?: ProductFormulaDto[];
 
-  constructor(companyId: string, name: string, cost: number, price: number, hasFormula: boolean, id?: string, productTypeId?: string, description?: string, imagenUrl?: string, elementList?: ProductElementDto[], formulaList?: ProductFormulaDto[]) {
+  constructor(companyId: string, name: string, cost: number, price: number, hasFormula: boolean, id?: string, productTypeId?: string, description?: string, imagenUrl?: string/*, active?: boolean*/, elementList?: ProductElementDto[], formulaList?: ProductFormulaDto[]) {
     this.companyId = companyId;
     this.name = name;
     this.cost = cost;
     this.price = price;
     this.hasFormula = hasFormula;
-    this.elementList = elementList;
-    this.formulaList = formulaList;
     this.id = id;
     this.productTypeId = productTypeId;
     this.description = description;
     this.imagenUrl = imagenUrl;
+    // this.active = active;
+    this.elementList = elementList;
+    this.formulaList = formulaList;
   }
 }
 

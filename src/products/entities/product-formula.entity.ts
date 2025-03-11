@@ -22,4 +22,5 @@ export class ProductFormula {
     { eager: true }
   )
   formula: Formula;
+  
 }

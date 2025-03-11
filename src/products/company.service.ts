@@ -1,4 +1,4 @@
-import { In, Like, Repository } from 'typeorm';
+import { In, Like, Raw, Repository } from 'typeorm';
 import { isUUID } from 'class-validator';
 import { ProcessSummaryDto, SearchInputDto, SearchPaginationDto } from 'profaxnojs/util';
 
@@ -218,9 +218,9 @@ export class CompanyService {
     // * search by id or partial value
     const value = inputDto.search;
     if(value) {
-      const whereById   = { id: value, active: true };
-      const whereByLike = { name: Like(`%${value}%`), active: true };
-      const where       = isUUID(value) ? whereById : whereByLike;
+      const whereById     = { id: value, active: true };
+      const whereByValue  = { name: value, active: true };
+      const where = isUUID(value) ? whereById : whereByValue;
 
       return this.companyRepository.find({
         take: limit,
@@ -235,8 +235,9 @@ export class CompanyService {
         take: limit,
         skip: (page - 1) * limit,
         where: {
-          name: In(inputDto.searchList),
-          active: true,
+          name: Raw( (fieldName) => inputDto.searchList.map(value => `${fieldName} LIKE '%${value}%'`).join(' OR ') ),
+          // name: In(inputDto.searchList),
+          active: true
         },
       })
     }
