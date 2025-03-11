@@ -27,4 +27,4 @@ Api del sistema siproad que permite gestionar elementos y productos.
 
 ### Configuración de la api
 * Apuntar el archivo .env a las variables de staging.
-* Crear contenedor de api ```docker-compose -p siproad up -d```
+* Crear contenedor de api ```docker-compose -p stg-siproad up -d```
