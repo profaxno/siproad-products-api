@@ -317,7 +317,7 @@ export class ProductTypeService {
     }
 
     // * search by value list
-    if(inputDto.searchList) {
+    if(inputDto.searchList.length > 0) {
       return this.productTypeRepository.find({
         take: limit,
         skip: (page - 1) * limit,
