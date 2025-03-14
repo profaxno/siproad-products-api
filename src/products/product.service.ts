@@ -19,6 +19,7 @@ import { DataReplicationService } from 'src/data-replication/data-replication.se
 import { AlreadyExistException, IsBeingUsedException } from '../common/exceptions/common.exception';
 import { ProductTypeService } from './product-type.service';
 import { JsonBasic } from 'src/data-replication/interfaces/json-basic.interface';
+import { ElementService } from './element.service';
 
 
 @Injectable()
@@ -37,18 +38,19 @@ export class ProductService {
     @InjectRepository(ProductElement, 'productsConn')
     private readonly productElementRepository: Repository<ProductElement>,
 
-    @InjectRepository(Element, 'productsConn')
-    private readonly elementRepository: Repository<Element>,
+    // @InjectRepository(Element, 'productsConn')
+    // private readonly elementRepository: Repository<Element>,
 
     @InjectRepository(ProductFormula, 'productsConn')
     private readonly productFormulaRepository: Repository<ProductFormula>,
     
-    @InjectRepository(Formula, 'productsConn')
-    private readonly formulaRepository: Repository<Formula>,
+    // @InjectRepository(Formula, 'productsConn')
+    // private readonly formulaRepository: Repository<Formula>,
 
     private readonly companyService: CompanyService,
-    private readonly productTypeService: ProductTypeService,
+    private readonly elementService: ElementService,
     private readonly formulaService: FormulaService,
+    private readonly productTypeService: ProductTypeService,
     private readonly replicationService: DataReplicationService
     
   ){
@@ -539,10 +541,9 @@ export class ProductService {
 
     // * find elements by id
     const elementIdList = productElementDtoList.map( (item) => item.id );
+    const inputDto: SearchInputDto = new SearchInputDto(undefined, undefined, elementIdList);
 
-    return this.elementRepository.findBy({ // TODO: Posiblemente aca deberia utilizarse el servicio y no el repositorio
-      id: In(elementIdList),
-    })
+    return this.elementService.findByParams({}, inputDto)
     .then( (elementList: Element[]) => {
 
       // * validate
@@ -620,15 +621,15 @@ export class ProductService {
     return productDto;
   }
 
-  private calculateElementsCost(list: FormulaElement[] | ProductElement[]): number{
+  // private calculateElementsCost(list: FormulaElement[] | ProductElement[]): number{
 
-    const cost = list.reduce( (acc, dto) => {
-      acc += dto.qty * dto.element.cost;
-      return acc;
-    }, 0);
+  //   const cost = list.reduce( (acc, dto) => {
+  //     acc += dto.qty * dto.element.cost;
+  //     return acc;
+  //   }, 0);
 
-    return cost;
-  }
+  //   return cost;
+  // }
 
   // * product with formula
   private updateProductFormula(product: Product, productFormulaDtoList: ProductFormulaDto[] = []): Promise<ProductFormula[] | ProductElement[]> {
@@ -642,10 +643,9 @@ export class ProductService {
 
     // * find formulas by id
     const formulaIdList = productFormulaDtoList.map( (item) => item.id );
+    const inputDto: SearchInputDto = new SearchInputDto(undefined, undefined, formulaIdList);
 
-    return this.formulaRepository.findBy({ // TODO: Posiblemente aca deberia utilizarse el servicio y no el repositorio
-      id: In(formulaIdList),
-    })
+    return this.formulaService.findByParams({}, inputDto)
     .then( (formulaList: Formula[]) => {
 
       // * validate
@@ -766,11 +766,10 @@ export class ProductService {
     if(dto.hasFormula){
 
       // * find formula by id
-      const idList = dto.formulaList.map( (item) => item.id );
+      const formulaIdList = dto.formulaList.map( (item) => item.id );
+      const inputDto: SearchInputDto = new SearchInputDto(undefined, undefined, formulaIdList);
 
-      return this.formulaRepository.findBy({ // TODO: Posiblemente aca deberia utilizarse el servicio y no el repositorio
-        id: In(idList),
-      })
+      return this.formulaService.findByParams({}, inputDto)
       .then( (entityList: Formula[]) => {
         
         // * calculate cost
@@ -790,31 +789,28 @@ export class ProductService {
     } else {
 
       // * find elements by id
-      const idList = dto.elementList.map( (item) => item.id );
+      const elementIdList = dto.elementList.map( (item) => item.id );
+      const inputDto: SearchInputDto = new SearchInputDto(undefined, undefined, elementIdList);
 
-      return this.elementRepository.findBy({ // TODO: Posiblemente aca deberia utilizarse el servicio y no el repositorio
-        id: In(idList),
-      })
+      return this.elementService.findByParams({}, inputDto)
       .then( (entityList: Element[]) => {
         
         // * calculate cost
-        const formulaElementList: FormulaElement[] = entityList.map( (item) => {
+        const productElementList: ProductElement[] = entityList.map( (item) => {
           const productElementDto = dto.elementList.find( (value) => value.id == item.id);
 
-          const entity = new FormulaElement();
+          const entity = new ProductElement();
           entity.element = item;
           entity.qty = productElementDto.qty;
           return entity;
         });
 
-        const cost = formulaElementList.reduce( (acc, dto) => acc + (dto.qty * dto.element.cost), 0);
+        const cost = productElementList.reduce( (acc, dto) => acc + (dto.qty * dto.element.cost), 0);
         return cost;
       })
 
     }
-
     
-
   }
 
 }
