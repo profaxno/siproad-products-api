@@ -257,12 +257,13 @@ export class ElementService {
         throw new NotFoundException(msg);
       }
 
+      // * prepare entity
       entity.company = companyList[0];
       entity.name = dto.name.toUpperCase()
       entity.cost = dto.cost;
       entity.stock = dto.stock;
       entity.unit = dto.unit;
-      // entity.elementType = xxx;
+      // entity.elementType = xxx; // TODO: implementar la consulta de categorias de elementos
 
       return entity;
       

@@ -261,7 +261,7 @@ export class ElementTypeService {
     }
 
     // * search by value list
-    if(inputDto.searchList.length > 0) {
+    if(inputDto.searchList?.length > 0) {
       return this.elementTypeRepository.find({
         take: limit,
         skip: (page - 1) * limit,
@@ -304,6 +304,7 @@ export class ElementTypeService {
         throw new NotFoundException(msg);
       }
 
+      // * prepare entity
       entity.company = companyList[0];
       entity.name = dto.name.toUpperCase();
       
