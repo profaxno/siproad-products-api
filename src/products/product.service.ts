@@ -437,17 +437,18 @@ export class ProductService {
       // * find product type
       const inputDto: SearchInputDto = new SearchInputDto(dto.productTypeId);
 
-      return this.productTypeService.findByParams({}, inputDto, dto.companyId)
+      return ( dto.productTypeId ? this.productTypeService.findByParams({}, inputDto, dto.companyId) : Promise.resolve([]) )
       .then( (productTypeList: ProductType[]) => {
         
         // * calculate cost
         return this.calculateProductCost(dto)
         .then( (cost: number) => {
 
+          // * prepare entity
           entity.company      = companyList[0];
           entity.name         = dto.name.toUpperCase();
           entity.description  = dto.description?.toUpperCase();
-          entity.cost         = cost; // TODO: falta crear campo manual cost
+          entity.cost         = cost;
           entity.price        = dto.price;
           entity.hasFormula   = dto.hasFormula;
           entity.productType  = productTypeList.length > 0 ? productTypeList[0] : undefined;
@@ -460,6 +461,48 @@ export class ProductService {
     })
     
   }
+
+  // private prepareEntity(entity: Product, dto: ProductDto): Promise<Product> {
+
+  //   // * find company
+  //   const inputDto: SearchInputDto = new SearchInputDto(dto.companyId);
+    
+  //   return this.companyService.findByParams({}, inputDto)
+  //   .then( async(companyList: Company[]) => {
+
+  //     if(companyList.length == 0){
+  //       const msg = `company not found, id=${dto.companyId}`;
+  //       this.logger.warn(`create: not executed (${msg})`);
+  //       throw new NotFoundException(msg);
+  //     }
+
+  //     // * find product type
+  //     let productType: ProductType = undefined;
+  //     if(dto.productTypeId){
+  //       const inputDto : SearchInputDto = new SearchInputDto(dto.productTypeId);
+  //       const productTypeList : ProductType[] = await this.productTypeService.findByParams({}, inputDto, dto.companyId);
+  //       productType = productTypeList.length > 0 ? productTypeList[0] : undefined;
+  //     }
+
+  //     // * calculate cost
+  //     return this.calculateProductCost(dto)
+  //     .then( (cost: number) => {
+
+  //       // * prepare entity
+  //       entity.company      = companyList[0];
+  //       entity.name         = dto.name.toUpperCase();
+  //       entity.description  = dto.description?.toUpperCase();
+  //       entity.cost         = cost;
+  //       entity.price        = dto.price;
+  //       entity.hasFormula   = dto.hasFormula;
+  //       entity.productType  = productType
+
+  //       return entity;
+  //     })
+
+  //   })
+    
+  // }
 
   private save(entity: Product): Promise<Product> {
     const start = performance.now();
