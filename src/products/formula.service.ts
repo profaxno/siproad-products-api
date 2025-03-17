@@ -321,7 +321,7 @@ export class FormulaService {
           company: { 
             id: companyId 
           },
-          name: Raw( (fieldName) => inputDto.searchList.map(value => `${fieldName} LIKE '%${value}%'`).join(' OR ') ),
+          name: Raw( (fieldName) => inputDto.searchList.map(value => `${fieldName} LIKE '%${value.replace(' ', '%')}%'`).join(' OR ') ),
           // name: In(inputDto.searchList),
           active: true
         },
