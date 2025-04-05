@@ -3,8 +3,8 @@ import { ProcessSummaryDto, SearchInputDto, SearchPaginationDto } from 'profaxno
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
-import { MessageDto } from './dto/message.dto';
-import { ProcessEnum, SourceEnum } from './enums';
+import { MessageDto } from '../dto/message.dto';
+import { ProcessEnum, SourceEnum } from '../enums';
 
 import { SNSClient, PublishCommand } from "@aws-sdk/client-sns";
 import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs";

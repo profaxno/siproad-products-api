@@ -12,10 +12,10 @@ import { ProductType, Company } from './entities';
 import { CompanyService } from './company.service';
 import { AlreadyExistException, IsBeingUsedException } from '../common/exceptions/common.exception';
 
-import { ProcessEnum, SourceEnum } from 'src/data-replication/enums';
-import { MessageDto } from 'src/data-replication/dto/message.dto';
-import { JsonBasic } from 'src/data-replication/interfaces/json-basic.interface';
-import { DataReplicationService } from 'src/data-replication/data-replication.service';
+import { ProcessEnum, SourceEnum } from 'src/data-transfer/enums';
+import { MessageDto } from 'src/data-transfer/dto/message.dto';
+import { JsonBasic } from 'src/data-transfer/interfaces/json-basic.interface';
+import { DataReplicationService } from 'src/data-transfer/data-replication/data-replication.service';
 
 @Injectable()
 export class ProductTypeService {

@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Queue } from 'bullmq';
-import { MessageDto } from './dto/message.dto';
+import { MessageDto } from '../dto/message.dto';
 import { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';  // Import Redis from ioredis
 
@@ -12,7 +12,8 @@ export class DataReplicationRedisProducerService {
   private readonly redisHost: string = "";
   private readonly redisPort: number = 0;
   private readonly redisPassword: string = "";
-  private readonly redisFamily: string = "";
+  private readonly redisFamily: number = 0;
+  private readonly redisJobQueueProductsSales: string = "";
 
   private queue: Queue;
 
@@ -20,10 +21,11 @@ export class DataReplicationRedisProducerService {
     private readonly configService: ConfigService
   ) {
     // * Retrieve the Redis configuration values from ConfigService
-    this.redisFamily = this.configService.get('redisFamily');
     this.redisHost = this.configService.get('redisHost');
     this.redisPort = this.configService.get('redisPort');
     this.redisPassword = this.configService.get('redisPassword');
+    this.redisFamily = this.configService.get('redisFamily');
+    this.redisJobQueueProductsSales = this.configService.get('redisJobQueueProductsSales');
     
 
     // * Create the Redis client using ioredis
@@ -31,15 +33,13 @@ export class DataReplicationRedisProducerService {
       host: this.redisHost,
       port: this.redisPort,
       password: this.redisPassword,
-      family: parseInt(this.redisFamily)
+      family: this.redisFamily
     });
 
     // * Configure the BullMQ queue with the redisClient
-    const dataConn = {
+    this.queue = new Queue(this.redisJobQueueProductsSales, {
       connection: redisClient,
-    }
-
-    this.queue = new Queue('jobQueue', dataConn); // * Create the queue with the Redis connection
+    });
   }
 
   // * Method to send a message to the queue
