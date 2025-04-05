@@ -13,12 +13,13 @@ import { FormulaService } from './formula.service';
 import { CompanyService } from './company.service';
 
 import { ProcessEnum, SourceEnum } from 'src/data-replication/enums';
-import { MessageDto, DataReplicationDto } from 'src/data-replication/dto/data-replication.dto';
+import { MessageDto } from 'src/data-replication/dto/message.dto';
 import { DataReplicationService } from 'src/data-replication/data-replication.service';
 
 import { AlreadyExistException, IsBeingUsedException } from '../common/exceptions/common.exception';
 import { ProductTypeService } from './product-type.service';
 import { JsonBasic } from 'src/data-replication/interfaces/json-basic.interface';
+import { ElementService } from './element.service';
 
 
 @Injectable()
@@ -37,18 +38,19 @@ export class ProductService {
     @InjectRepository(ProductElement, 'productsConn')
     private readonly productElementRepository: Repository<ProductElement>,
 
-    @InjectRepository(Element, 'productsConn')
-    private readonly elementRepository: Repository<Element>,
+    // @InjectRepository(Element, 'productsConn')
+    // private readonly elementRepository: Repository<Element>,
 
     @InjectRepository(ProductFormula, 'productsConn')
     private readonly productFormulaRepository: Repository<ProductFormula>,
     
-    @InjectRepository(Formula, 'productsConn')
-    private readonly formulaRepository: Repository<Formula>,
+    // @InjectRepository(Formula, 'productsConn')
+    // private readonly formulaRepository: Repository<Formula>,
 
     private readonly companyService: CompanyService,
-    private readonly productTypeService: ProductTypeService,
+    private readonly elementService: ElementService,
     private readonly formulaService: FormulaService,
+    private readonly productTypeService: ProductTypeService,
     private readonly replicationService: DataReplicationService
     
   ){
@@ -113,8 +115,7 @@ export class ProductService {
 
           // * replication data
           const messageDto = new MessageDto(SourceEnum.API_PRODUCTS, ProcessEnum.PRODUCT_UPDATE, JSON.stringify(dto));
-          const dataReplicationDto: DataReplicationDto = new DataReplicationDto([messageDto]);
-          this.replicationService.sendMessages(dataReplicationDto);
+          this.replicationService.sendMessages([messageDto]);
 
           const end = performance.now();
           this.logger.log(`update: executed, runtime=${(end - start) / 1000} seconds`);
@@ -165,8 +166,7 @@ export class ProductService {
 
           // * replication data
           const messageDto = new MessageDto(SourceEnum.API_PRODUCTS, ProcessEnum.PRODUCT_UPDATE, JSON.stringify(dto));
-          const dataReplicationDto: DataReplicationDto = new DataReplicationDto([messageDto]);
-          this.replicationService.sendMessages(dataReplicationDto);
+          this.replicationService.sendMessages([messageDto]);
 
           const end = performance.now();
           this.logger.log(`create: created OK, runtime=${(end - start) / 1000} seconds`);
@@ -297,8 +297,7 @@ export class ProductService {
         // * replication data
         const jsonBasic: JsonBasic = { id: entity.id }
         const messageDto = new MessageDto(SourceEnum.API_PRODUCTS, ProcessEnum.PRODUCT_DELETE, JSON.stringify(jsonBasic));
-        const dataReplicationDto: DataReplicationDto = new DataReplicationDto([messageDto]);
-        this.replicationService.sendMessages(dataReplicationDto);
+        this.replicationService.sendMessages([messageDto]);
 
         const end = performance.now();
         this.logger.log(`remove: OK, runtime=${(end - start) / 1000} seconds`);
@@ -354,7 +353,7 @@ export class ProductService {
           company: { 
             id: companyId 
           },
-          name: Raw( (fieldName) => inputDto.searchList.map(value => `${fieldName} LIKE '%${value}%'`).join(' OR ') ),
+          name: Raw( (fieldName) => inputDto.searchList.map(value => `${fieldName} LIKE '%${value.replace(' ', '%')}%'`).join(' OR ') ),
           // name: In(inputDto.searchList),
           active: true
         },
@@ -397,13 +396,11 @@ export class ProductService {
 
       const messageDtoList: MessageDto[] = entityList.map( value => {
         const process = value.active ? ProcessEnum.PRODUCT_UPDATE : ProcessEnum.PRODUCT_DELETE;
-        const dto = new ProductDto(value.company.id, value.name, value.cost, value.price, value.hasFormula, value.id, value.productType?.id, value.description, value.imagenUrl);
+        const dto = new ProductDto(value.company.id, value.name, value.cost, value.price, value.hasFormula, value.id, value.code, value.productType?.id, value.description, value.imagenUrl);
         return new MessageDto(SourceEnum.API_PRODUCTS, process, JSON.stringify(dto));
-      });
-
-      const dataReplicationDto: DataReplicationDto = new DataReplicationDto(messageDtoList);
+      })
             
-      return this.replicationService.sendMessages(dataReplicationDto)
+      return this.replicationService.sendMessages(messageDtoList)
       .then( () => {
         paginationDto.page++;
         return this.synchronize(companyId, paginationDto);
@@ -435,20 +432,22 @@ export class ProductService {
       // * find product type
       const inputDto: SearchInputDto = new SearchInputDto(dto.productTypeId);
 
-      return this.productTypeService.findByParams({}, inputDto, dto.companyId)
+      return ( dto.productTypeId ? this.productTypeService.findByParams({}, inputDto, dto.companyId) : Promise.resolve([]) )
       .then( (productTypeList: ProductType[]) => {
         
         // * calculate cost
         return this.calculateProductCost(dto)
         .then( (cost: number) => {
 
+          // * prepare entity
           entity.company      = companyList[0];
           entity.name         = dto.name.toUpperCase();
-          entity.description  = dto.description?.toUpperCase();
-          entity.cost         = cost; // TODO: falta crear campo manual cost
+          entity.code         = dto.code ? dto.code.toUpperCase() : null;
+          entity.description  = dto.description ? dto.description.toUpperCase() : null;
+          entity.cost         = cost;
           entity.price        = dto.price;
           entity.hasFormula   = dto.hasFormula;
-          entity.productType  = productTypeList.length > 0 ? productTypeList[0] : undefined;
+          entity.productType  = productTypeList.length > 0 ? productTypeList[0] : null;
 
           return entity;
         })
@@ -458,6 +457,48 @@ export class ProductService {
     })
     
   }
+
+  // private prepareEntity(entity: Product, dto: ProductDto): Promise<Product> {
+
+  //   // * find company
+  //   const inputDto: SearchInputDto = new SearchInputDto(dto.companyId);
+    
+  //   return this.companyService.findByParams({}, inputDto)
+  //   .then( async(companyList: Company[]) => {
+
+  //     if(companyList.length == 0){
+  //       const msg = `company not found, id=${dto.companyId}`;
+  //       this.logger.warn(`create: not executed (${msg})`);
+  //       throw new NotFoundException(msg);
+  //     }
+
+  //     // * find product type
+  //     let productType: ProductType = undefined;
+  //     if(dto.productTypeId){
+  //       const inputDto : SearchInputDto = new SearchInputDto(dto.productTypeId);
+  //       const productTypeList : ProductType[] = await this.productTypeService.findByParams({}, inputDto, dto.companyId);
+  //       productType = productTypeList.length > 0 ? productTypeList[0] : undefined;
+  //     }
+
+  //     // * calculate cost
+  //     return this.calculateProductCost(dto)
+  //     .then( (cost: number) => {
+
+  //       // * prepare entity
+  //       entity.company      = companyList[0];
+  //       entity.name         = dto.name.toUpperCase();
+  //       entity.description  = dto.description?.toUpperCase();
+  //       entity.cost         = cost;
+  //       entity.price        = dto.price;
+  //       entity.hasFormula   = dto.hasFormula;
+  //       entity.productType  = productType
+
+  //       return entity;
+  //     })
+
+  //   })
+    
+  // }
 
   private save(entity: Product): Promise<Product> {
     const start = performance.now();
@@ -539,10 +580,9 @@ export class ProductService {
 
     // * find elements by id
     const elementIdList = productElementDtoList.map( (item) => item.id );
+    const inputDto: SearchInputDto = new SearchInputDto(undefined, undefined, elementIdList);
 
-    return this.elementRepository.findBy({ // TODO: Posiblemente aca deberia utilizarse el servicio y no el repositorio
-      id: In(elementIdList),
-    })
+    return this.elementService.findByParams({}, inputDto)
     .then( (elementList: Element[]) => {
 
       // * validate
@@ -615,20 +655,20 @@ export class ProductService {
     }
 
     // * generate product dto
-    const productDto = new ProductDto(product.company.id, product.name, product.cost, product.price, product.hasFormula, product.id, product.productType?.id, product.description, product.imagenUrl/*, product.active*/, productElementDtoList, []);
+    const productDto = new ProductDto(product.company.id, product.name, product.cost, product.price, product.hasFormula, product.id, product.code, product.productType?.id, product.description, product.imagenUrl/*, product.active*/, productElementDtoList, []);
 
     return productDto;
   }
 
-  private calculateElementsCost(list: FormulaElement[] | ProductElement[]): number{
+  // private calculateElementsCost(list: FormulaElement[] | ProductElement[]): number{
 
-    const cost = list.reduce( (acc, dto) => {
-      acc += dto.qty * dto.element.cost;
-      return acc;
-    }, 0);
+  //   const cost = list.reduce( (acc, dto) => {
+  //     acc += dto.qty * dto.element.cost;
+  //     return acc;
+  //   }, 0);
 
-    return cost;
-  }
+  //   return cost;
+  // }
 
   // * product with formula
   private updateProductFormula(product: Product, productFormulaDtoList: ProductFormulaDto[] = []): Promise<ProductFormula[] | ProductElement[]> {
@@ -642,10 +682,9 @@ export class ProductService {
 
     // * find formulas by id
     const formulaIdList = productFormulaDtoList.map( (item) => item.id );
+    const inputDto: SearchInputDto = new SearchInputDto(undefined, undefined, formulaIdList);
 
-    return this.formulaRepository.findBy({ // TODO: Posiblemente aca deberia utilizarse el servicio y no el repositorio
-      id: In(formulaIdList),
-    })
+    return this.formulaService.findByParams({}, inputDto)
     .then( (formulaList: Formula[]) => {
 
       // * validate
@@ -744,7 +783,7 @@ export class ProductService {
 
     // * generate product dto
     
-    const productDto = new ProductDto(product.company.id, product.name, product.cost, product.price, product.hasFormula, product.id, product.productType?.id, product.description, product.imagenUrl/*, product.active*/, [], productFormulaDtoList);
+    const productDto = new ProductDto(product.company.id, product.name, product.cost, product.price, product.hasFormula, product.id, product.code, product.productType?.id, product.description, product.imagenUrl/*, product.active*/, [], productFormulaDtoList);
 
     return productDto;
   }
@@ -766,11 +805,10 @@ export class ProductService {
     if(dto.hasFormula){
 
       // * find formula by id
-      const idList = dto.formulaList.map( (item) => item.id );
+      const formulaIdList = dto.formulaList.map( (item) => item.id );
+      const inputDto: SearchInputDto = new SearchInputDto(undefined, undefined, formulaIdList);
 
-      return this.formulaRepository.findBy({ // TODO: Posiblemente aca deberia utilizarse el servicio y no el repositorio
-        id: In(idList),
-      })
+      return this.formulaService.findByParams({}, inputDto)
       .then( (entityList: Formula[]) => {
         
         // * calculate cost
@@ -790,31 +828,28 @@ export class ProductService {
     } else {
 
       // * find elements by id
-      const idList = dto.elementList.map( (item) => item.id );
+      const elementIdList = dto.elementList.map( (item) => item.id );
+      const inputDto: SearchInputDto = new SearchInputDto(undefined, undefined, elementIdList);
 
-      return this.elementRepository.findBy({ // TODO: Posiblemente aca deberia utilizarse el servicio y no el repositorio
-        id: In(idList),
-      })
+      return this.elementService.findByParams({}, inputDto)
       .then( (entityList: Element[]) => {
         
         // * calculate cost
-        const formulaElementList: FormulaElement[] = entityList.map( (item) => {
+        const productElementList: ProductElement[] = entityList.map( (item) => {
           const productElementDto = dto.elementList.find( (value) => value.id == item.id);
 
-          const entity = new FormulaElement();
+          const entity = new ProductElement();
           entity.element = item;
           entity.qty = productElementDto.qty;
           return entity;
         });
 
-        const cost = formulaElementList.reduce( (acc, dto) => acc + (dto.qty * dto.element.cost), 0);
+        const cost = productElementList.reduce( (acc, dto) => acc + (dto.qty * dto.element.cost), 0);
         return cost;
       })
 
     }
-
     
-
   }
 
 }

@@ -5,9 +5,7 @@ import { ConfigModule } from '@nestjs/config';
 import { config } from './config/app.config';
 
 import { ProductsModule } from './products/products.module';
-import { DataReplicationModule } from './data-replication/data-replication.module';
 
-// TODO: HACER EL README
 @Module({
   imports: [
     ConfigModule.forRoot({

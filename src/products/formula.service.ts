@@ -12,6 +12,7 @@ import { Formula, FormulaElement, Element, Company } from './entities';
 import { CompanyService } from './company.service';
 
 import { AlreadyExistException, IsBeingUsedException } from '../common/exceptions/common.exception';
+import { ElementService } from './element.service';
 
 @Injectable()
 export class FormulaService {
@@ -29,10 +30,11 @@ export class FormulaService {
     @InjectRepository(FormulaElement, 'productsConn')
     private readonly formulaElementRepository: Repository<FormulaElement>,
 
-    @InjectRepository(Element, 'productsConn')
-    private readonly elementRepository: Repository<Element>,
+    // @InjectRepository(Element, 'productsConn')
+    // private readonly elementRepository: Repository<Element>,
 
-    private readonly companyService: CompanyService
+    private readonly companyService: CompanyService,
+    private readonly elementService: ElementService
     
   ){
     this.dbDefaultLimit = this.ConfigService.get("dbDefaultLimit");
@@ -290,7 +292,7 @@ export class FormulaService {
     
   }
 
-  private findByParams(paginationDto: SearchPaginationDto, inputDto: SearchInputDto, companyId?: string): Promise<Formula[]> {
+  findByParams(paginationDto: SearchPaginationDto, inputDto: SearchInputDto, companyId?: string): Promise<Formula[]> {
     const {page=1, limit=this.dbDefaultLimit} = paginationDto;
 
     // * search by id or partial value
@@ -311,7 +313,7 @@ export class FormulaService {
     }
 
     // * search by value list
-    if(inputDto.searchList) {
+    if(inputDto.searchList?.length > 0) {
       return this.formulaRepository.find({
         take: limit,
         skip: (page - 1) * limit,
@@ -319,8 +321,23 @@ export class FormulaService {
           company: { 
             id: companyId 
           },
-          name: Raw( (fieldName) => inputDto.searchList.map(value => `${fieldName} LIKE '%${value}%'`).join(' OR ') ),
+          name: Raw( (fieldName) => inputDto.searchList.map(value => `${fieldName} LIKE '%${value.replace(' ', '%')}%'`).join(' OR ') ),
           // name: In(inputDto.searchList),
+          active: true
+        },
+        relations: {
+          formulaElement: true
+        }
+      })
+    }
+
+    // * search by id list
+    if(inputDto.idList?.length > 0) {
+      return this.formulaRepository.find({
+        take: limit,
+        skip: (page - 1) * limit,
+        where: {
+          id: In(inputDto.idList),
           active: true
         },
         relations: {
@@ -370,10 +387,9 @@ export class FormulaService {
 
     // * find elements by id
     const elementIdList = formulaElementDtoList.map( (item) => item.id );
+    const inputDto: SearchInputDto = new SearchInputDto(undefined, undefined, elementIdList);
 
-    return this.elementRepository.findBy({ // TODO: Posiblemente aca deberia utilizarse el servicio y no el repositorio
-      id: In(elementIdList),
-    })
+    return this.elementService.findByParams({}, inputDto)
     .then( (elementList: Element[]) => {
 
       // * validate
@@ -451,24 +467,23 @@ export class FormulaService {
     return formulaDto;
   }
 
-  private calculateElementsCost(list: FormulaElement[]): number{
+  // private calculateElementsCost(list: FormulaElement[]): number{
   
-    const cost = list.reduce( (acc, dto) => {
-      acc += dto.qty * dto.element.cost;
-      return acc;
-    }, 0);
+  //   const cost = list.reduce( (acc, dto) => {
+  //     acc += dto.qty * dto.element.cost;
+  //     return acc;
+  //   }, 0);
 
-    return cost;
-  }
+  //   return cost;
+  // }
 
   private calculateFormulaCost(dto: FormulaDto): Promise<number>{
 
     // * find elements by id
-    const idList = dto.elementList.map( (item) => item.id );
+    const elementIdList = dto.elementList.map( (item) => item.id );
+    const inputDto: SearchInputDto = new SearchInputDto(undefined, undefined, elementIdList);
 
-    return this.elementRepository.findBy({ // TODO: Posiblemente aca deberia utilizarse el servicio y no el repositorio
-      id: In(idList),
-    })
+    return this.elementService.findByParams({}, inputDto)
     .then( (entityList: Element[]) => {
       
       // * calculate cost

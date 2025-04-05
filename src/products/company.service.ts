@@ -230,15 +230,15 @@ export class CompanyService {
     }
 
     // * search by value list
-    if(inputDto.searchList) {
+    if(inputDto.searchList?.length > 0) {
       return this.companyRepository.find({
         take: limit,
         skip: (page - 1) * limit,
         where: {
-          name: Raw( (fieldName) => inputDto.searchList.map(value => `${fieldName} LIKE '%${value}%'`).join(' OR ') ),
+          name: Raw( (fieldName) => inputDto.searchList.map(value => `${fieldName} LIKE '%${value.replace(' ', '%')}%'`).join(' OR ') ),
           // name: In(inputDto.searchList),
           active: true
-        },
+        }
       })
     }
 

@@ -261,7 +261,7 @@ export class ElementTypeService {
     }
 
     // * search by value list
-    if(inputDto.searchList) {
+    if(inputDto.searchList?.length > 0) {
       return this.elementTypeRepository.find({
         take: limit,
         skip: (page - 1) * limit,
@@ -269,7 +269,7 @@ export class ElementTypeService {
           company: {
             id: companyId
           },
-          name: Raw( (fieldName) => inputDto.searchList.map(value => `${fieldName} LIKE '%${value}%'`).join(' OR ') ),
+          name: Raw( (fieldName) => inputDto.searchList.map(value => `${fieldName} LIKE '%${value.replace(' ', '%')}%'`).join(' OR ') ),
           // name: In(inputDto.searchList),
           active: true
         }
@@ -304,6 +304,7 @@ export class ElementTypeService {
         throw new NotFoundException(msg);
       }
 
+      // * prepare entity
       entity.company = companyList[0];
       entity.name = dto.name.toUpperCase();
       

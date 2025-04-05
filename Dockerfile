@@ -1,21 +1,41 @@
-# Usa una imagen base de Node.js
-FROM node:18
+# Etapa 1: Construcción de la aplicación
+FROM node:18-alpine AS builder
 
-# Define el directorio de trabajo en el contenedor
+# Establece el directorio de trabajo dentro del contenedor
 WORKDIR /app
 
-# Copia package.json e instala dependencias
-COPY package*.json ./
-RUN npm prune --production
+# Copia los archivos necesarios
+COPY package.json package-lock.json ./
 
-# Copia todo el código de la app al contenedor
+# Instala solo las dependencias necesarias para construir la app
+RUN npm install --omit=dev
+
+# Instala NestJS CLI globalmente
+RUN npm install -g @nestjs/cli
+
+# Copia el resto del código fuente
 COPY . .
 
-# Compila el código TypeScript
+# Compila TypeScript
 RUN npm run build
 
-# Expone el puerto en el que corre NestJS (ajústalo si es diferente)
+# Etapa 2: Imagen final para producción
+FROM node:18-alpine
+
+WORKDIR /app
+
+# Copia solo los archivos necesarios desde la etapa de construcción
+
+# ! Descomentar para despliegues en docker dev
+# COPY --from=builder /app/.env ./
+
+COPY --from=builder /app/package.json /app/package-lock.json ./
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/dist ./dist
+
+# Expone el puerto en el que corre la app
 EXPOSE 80
 
 # Comando para iniciar la aplicación
+# CMD ["node", "dist/main.js"]
 CMD ["npm", "run", "start:prod"]
