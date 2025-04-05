@@ -10,6 +10,9 @@ export class Product {
   @Column('varchar', { length: 50 })
   name: string;
 
+  @Column('varchar', { length: 50 })
+  code: string;
+
   @Column('varchar', { length: 100, nullable: true })
   description: string;
 

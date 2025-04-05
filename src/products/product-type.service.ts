@@ -13,7 +13,7 @@ import { CompanyService } from './company.service';
 import { AlreadyExistException, IsBeingUsedException } from '../common/exceptions/common.exception';
 
 import { ProcessEnum, SourceEnum } from 'src/data-replication/enums';
-import { DataReplicationDto, MessageDto } from 'src/data-replication/dto/data-replication.dto';
+import { MessageDto } from 'src/data-replication/dto/message.dto';
 import { JsonBasic } from 'src/data-replication/interfaces/json-basic.interface';
 import { DataReplicationService } from 'src/data-replication/data-replication.service';
 
@@ -92,8 +92,7 @@ export class ProductTypeService {
 
         // * replication data
         const messageDto = new MessageDto(SourceEnum.API_PRODUCTS, ProcessEnum.PRODUCT_TYPE_UPDATE, JSON.stringify(dto));
-        const dataReplicationDto: DataReplicationDto = new DataReplicationDto([messageDto]);
-        this.replicationService.sendMessages(dataReplicationDto);
+        this.replicationService.sendMessages([messageDto]);
 
         const end = performance.now();
         this.logger.log(`update: executed, runtime=${(end - start) / 1000} seconds`);
@@ -138,8 +137,7 @@ export class ProductTypeService {
 
         // * replication data
         const messageDto = new MessageDto(SourceEnum.API_PRODUCTS, ProcessEnum.PRODUCT_TYPE_UPDATE, JSON.stringify(dto));
-        const dataReplicationDto: DataReplicationDto = new DataReplicationDto([messageDto]);
-        this.replicationService.sendMessages(dataReplicationDto);
+        this.replicationService.sendMessages([messageDto]);
         
         const end = performance.now();
         this.logger.log(`create: OK, runtime=${(end - start) / 1000} seconds`);
@@ -239,8 +237,7 @@ export class ProductTypeService {
         // * replication data
         const jsonBasic: JsonBasic = { id: entity.id }
         const messageDto = new MessageDto(SourceEnum.API_PRODUCTS, ProcessEnum.PRODUCT_TYPE_DELETE, JSON.stringify(jsonBasic));
-        const dataReplicationDto: DataReplicationDto = new DataReplicationDto([messageDto]);
-        this.replicationService.sendMessages(dataReplicationDto);
+        this.replicationService.sendMessages([messageDto]);
 
         const end = performance.now();
         this.logger.log(`remove: OK, runtime=${(end - start) / 1000} seconds`);
@@ -281,10 +278,8 @@ export class ProductTypeService {
         const dto = new ProductTypeDto(value.company.id, value.name, value.id);
         return new MessageDto(SourceEnum.API_PRODUCTS, process, JSON.stringify(dto));
       });
-
-      const dataReplicationDto: DataReplicationDto = new DataReplicationDto(messageDtoList);
             
-      return this.replicationService.sendMessages(dataReplicationDto)
+      return this.replicationService.sendMessages(messageDtoList)
       .then( () => {
         paginationDto.page++;
         return this.synchronize(companyId, paginationDto);

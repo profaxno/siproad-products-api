@@ -8,6 +8,10 @@ export const config = () => ({
     executionRetries: +process.env.EXECUTION_RETRIES || 2,
     executionBaseDelay: +process.env.EXECUTION_BASE_DELAY || 1000,
     
+    dbDefaultLimit: +process.env.DB_DEFAULT_LIMIT || 1000,
+
+    queueType: process.env.QUEUE_TYPE,
+
     useLocalStack: +process.env.USE_LOCAL_STACK,
     awsHost: process.env.AWS_HOST,
     awsRegion: process.env.AWS_REGION,
@@ -15,5 +19,7 @@ export const config = () => ({
     awsSecretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
     productsSnsTopicArn: process.env.PRODUCTS_SNS_TOPIC_ARN,
 
-    dbDefaultLimit: +process.env.DB_DEFAULT_LIMIT || 1000
+    redisHost: process.env.REDIS_HOST,
+    redisPort: +process.env.REDIS_PORT || 6379,
+    redisPassword: process.env.REDIS_PASSWORD
   })

@@ -13,7 +13,7 @@ import { FormulaService } from './formula.service';
 import { CompanyService } from './company.service';
 
 import { ProcessEnum, SourceEnum } from 'src/data-replication/enums';
-import { MessageDto, DataReplicationDto } from 'src/data-replication/dto/data-replication.dto';
+import { MessageDto } from 'src/data-replication/dto/message.dto';
 import { DataReplicationService } from 'src/data-replication/data-replication.service';
 
 import { AlreadyExistException, IsBeingUsedException } from '../common/exceptions/common.exception';
@@ -115,8 +115,7 @@ export class ProductService {
 
           // * replication data
           const messageDto = new MessageDto(SourceEnum.API_PRODUCTS, ProcessEnum.PRODUCT_UPDATE, JSON.stringify(dto));
-          const dataReplicationDto: DataReplicationDto = new DataReplicationDto([messageDto]);
-          this.replicationService.sendMessages(dataReplicationDto);
+          this.replicationService.sendMessages([messageDto]);
 
           const end = performance.now();
           this.logger.log(`update: executed, runtime=${(end - start) / 1000} seconds`);
@@ -167,8 +166,7 @@ export class ProductService {
 
           // * replication data
           const messageDto = new MessageDto(SourceEnum.API_PRODUCTS, ProcessEnum.PRODUCT_UPDATE, JSON.stringify(dto));
-          const dataReplicationDto: DataReplicationDto = new DataReplicationDto([messageDto]);
-          this.replicationService.sendMessages(dataReplicationDto);
+          this.replicationService.sendMessages([messageDto]);
 
           const end = performance.now();
           this.logger.log(`create: created OK, runtime=${(end - start) / 1000} seconds`);
@@ -299,8 +297,7 @@ export class ProductService {
         // * replication data
         const jsonBasic: JsonBasic = { id: entity.id }
         const messageDto = new MessageDto(SourceEnum.API_PRODUCTS, ProcessEnum.PRODUCT_DELETE, JSON.stringify(jsonBasic));
-        const dataReplicationDto: DataReplicationDto = new DataReplicationDto([messageDto]);
-        this.replicationService.sendMessages(dataReplicationDto);
+        this.replicationService.sendMessages([messageDto]);
 
         const end = performance.now();
         this.logger.log(`remove: OK, runtime=${(end - start) / 1000} seconds`);
@@ -399,13 +396,11 @@ export class ProductService {
 
       const messageDtoList: MessageDto[] = entityList.map( value => {
         const process = value.active ? ProcessEnum.PRODUCT_UPDATE : ProcessEnum.PRODUCT_DELETE;
-        const dto = new ProductDto(value.company.id, value.name, value.cost, value.price, value.hasFormula, value.id, value.productType?.id, value.description, value.imagenUrl);
+        const dto = new ProductDto(value.company.id, value.name, value.cost, value.price, value.hasFormula, value.id, value.code, value.productType?.id, value.description, value.imagenUrl);
         return new MessageDto(SourceEnum.API_PRODUCTS, process, JSON.stringify(dto));
-      });
-
-      const dataReplicationDto: DataReplicationDto = new DataReplicationDto(messageDtoList);
+      })
             
-      return this.replicationService.sendMessages(dataReplicationDto)
+      return this.replicationService.sendMessages(messageDtoList)
       .then( () => {
         paginationDto.page++;
         return this.synchronize(companyId, paginationDto);
@@ -447,11 +442,12 @@ export class ProductService {
           // * prepare entity
           entity.company      = companyList[0];
           entity.name         = dto.name.toUpperCase();
-          entity.description  = dto.description?.toUpperCase();
+          entity.code         = dto.code ? dto.code.toUpperCase() : null;
+          entity.description  = dto.description ? dto.description.toUpperCase() : null;
           entity.cost         = cost;
           entity.price        = dto.price;
           entity.hasFormula   = dto.hasFormula;
-          entity.productType  = productTypeList.length > 0 ? productTypeList[0] : undefined;
+          entity.productType  = productTypeList.length > 0 ? productTypeList[0] : null;
 
           return entity;
         })
@@ -659,7 +655,7 @@ export class ProductService {
     }
 
     // * generate product dto
-    const productDto = new ProductDto(product.company.id, product.name, product.cost, product.price, product.hasFormula, product.id, product.productType?.id, product.description, product.imagenUrl/*, product.active*/, productElementDtoList, []);
+    const productDto = new ProductDto(product.company.id, product.name, product.cost, product.price, product.hasFormula, product.id, product.code, product.productType?.id, product.description, product.imagenUrl/*, product.active*/, productElementDtoList, []);
 
     return productDto;
   }
@@ -787,7 +783,7 @@ export class ProductService {
 
     // * generate product dto
     
-    const productDto = new ProductDto(product.company.id, product.name, product.cost, product.price, product.hasFormula, product.id, product.productType?.id, product.description, product.imagenUrl/*, product.active*/, [], productFormulaDtoList);
+    const productDto = new ProductDto(product.company.id, product.name, product.cost, product.price, product.hasFormula, product.id, product.code, product.productType?.id, product.description, product.imagenUrl/*, product.active*/, [], productFormulaDtoList);
 
     return productDto;
   }
