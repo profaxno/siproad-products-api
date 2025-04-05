@@ -21,5 +21,6 @@ export const config = () => ({
 
     redisHost: process.env.REDIS_HOST,
     redisPort: +process.env.REDIS_PORT || 6379,
-    redisPassword: process.env.REDIS_PASSWORD
+    redisPassword: process.env.REDIS_PASSWORD,
+    redisFamily: process.env.REDIS_FAMILY
   })
