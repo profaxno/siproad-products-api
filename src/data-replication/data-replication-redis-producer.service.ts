@@ -20,23 +20,29 @@ export class DataReplicationRedisProducerService {
     private readonly configService: ConfigService
   ) {
     // Retrieve the Redis configuration values from ConfigService
-    this.redisFamily = this.configService.get('redisFamily'); // IPv4
-    this.redisHost = this.configService.get('redisHost') + this.redisFamily;
+    this.redisFamily = this.configService.get('redisFamily'); // * IPv4
+    this.redisHost = this.configService.get('redisHost');
     this.redisPort = this.configService.get('redisPort');
     this.redisPassword = this.configService.get('redisPassword'); // Obtener la contraseña desde ConfigService
     
 
     // Create the Redis client using ioredis
     const redisClient = new Redis({
-      host: this.redisHost,
+      host: this.redisHost + this.redisFamily,
       port: this.redisPort,
       password: this.redisPassword,  // Pass the password here
     });
 
     // Configure the BullMQ queue with the redisClient
-    this.queue = new Queue('jobQueue', {
-      connection: redisClient,  // Pass the Redis client connection here
-    });
+    const dataConn = {
+      family: 0,  // * IPv4
+      connection: redisClient,
+    }
+
+    if (this.redisFamily === '')
+      delete dataConn.family; // Remove the family property if not needed
+
+    this.queue = new Queue('jobQueue', dataConn); // Create the queue with the Redis connection
   }
 
   // Method to send a message to the queue
