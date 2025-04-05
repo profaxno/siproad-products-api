@@ -12,6 +12,7 @@ export class DataReplicationRedisProducerService {
   private readonly redisHost: string = "";
   private readonly redisPort: number = 0;
   private readonly redisPassword: string = ""; // Agregar la contraseña aquí
+  private readonly redisFamily: string = ""; // IPv4
 
   private queue: Queue;
 
@@ -19,9 +20,11 @@ export class DataReplicationRedisProducerService {
     private readonly configService: ConfigService
   ) {
     // Retrieve the Redis configuration values from ConfigService
-    this.redisHost = this.configService.get('redisHost');
+    this.redisFamily = this.configService.get('redisFamily'); // IPv4
+    this.redisHost = this.configService.get('redisHost') + this.redisFamily;
     this.redisPort = this.configService.get('redisPort');
     this.redisPassword = this.configService.get('redisPassword'); // Obtener la contraseña desde ConfigService
+    
 
     // Create the Redis client using ioredis
     const redisClient = new Redis({
