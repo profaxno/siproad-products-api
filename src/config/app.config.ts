@@ -22,5 +22,7 @@ export const config = () => ({
     redisHost: process.env.REDIS_HOST,
     redisPort: +process.env.REDIS_PORT || 6379,
     redisPassword: process.env.REDIS_PASSWORD,
-    redisFamily: process.env.REDIS_FAMILY
+    redisFamily: +process.env.REDIS_FAMILY,
+    redisJobQueueProductsSales: process.env.REDIS_JOB_QUEUE_PRODUCTS_SALES,
+    redisJobQueueAdminProducts: process.env.REDIS_JOB_QUEUE_ADMIN_PRODUCTS
   })

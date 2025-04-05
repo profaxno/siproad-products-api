@@ -22,7 +22,7 @@ import { ElementTypeService } from './element-type.service';
 
 import { Company, ProductType, Product, ProductFormula, Formula, FormulaElement, Element, ElementType, ProductElement } from './entities';
 
-import { DataReplicationModule } from 'src/data-replication/data-replication.module';
+import { DataReplicationModule } from 'src/data-transfer/data-replication/data-replication.module';
 
 @Module({
   imports: [
