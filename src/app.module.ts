@@ -5,6 +5,7 @@ import { ConfigModule } from '@nestjs/config';
 import { config } from './config/app.config';
 
 import { ProductsModule } from './products/products.module';
+import { DataReceptionModule } from './data-transfer/data-reception/data-reception.module';
 
 @Module({
   imports: [
@@ -23,7 +24,8 @@ import { ProductsModule } from './products/products.module';
       synchronize: false,
       autoLoadEntities: true
     }),
-    ProductsModule
+    ProductsModule,
+    DataReceptionModule
   ],
   controllers: [],
   providers: [],
