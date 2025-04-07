@@ -396,7 +396,7 @@ export class ProductService {
 
       const messageDtoList: MessageDto[] = entityList.map( value => {
         const process = value.active ? ProcessEnum.PRODUCT_UPDATE : ProcessEnum.PRODUCT_DELETE;
-        const dto = new ProductDto(value.company.id, value.name, value.cost, value.price, value.hasFormula, value.id, value.code, value.productType?.id, value.description, value.imagenUrl);
+        const dto = new ProductDto(value.company.id, value.name, value.cost, value.price, value.hasFormula, value.active, value.id, value.code, value.productType?.id, value.description, value.imagenUrl);
         return new MessageDto(SourceEnum.API_PRODUCTS, process, JSON.stringify(dto));
       })
             
@@ -447,6 +447,7 @@ export class ProductService {
           entity.cost         = cost;
           entity.price        = dto.price;
           entity.hasFormula   = dto.hasFormula;
+          entity.active       = dto.active;
           entity.productType  = productTypeList.length > 0 ? productTypeList[0] : null;
 
           return entity;
@@ -655,7 +656,7 @@ export class ProductService {
     }
 
     // * generate product dto
-    const productDto = new ProductDto(product.company.id, product.name, product.cost, product.price, product.hasFormula, product.id, product.code, product.productType?.id, product.description, product.imagenUrl/*, product.active*/, productElementDtoList, []);
+    const productDto = new ProductDto(product.company.id, product.name, product.cost, product.price, product.hasFormula, product.active, product.id, product.code, product.productType?.id, product.description, product.imagenUrl/*, product.active*/, productElementDtoList, []);
 
     return productDto;
   }
@@ -783,7 +784,7 @@ export class ProductService {
 
     // * generate product dto
     
-    const productDto = new ProductDto(product.company.id, product.name, product.cost, product.price, product.hasFormula, product.id, product.code, product.productType?.id, product.description, product.imagenUrl/*, product.active*/, [], productFormulaDtoList);
+    const productDto = new ProductDto(product.company.id, product.name, product.cost, product.price, product.hasFormula, product.active, product.id, product.code, product.productType?.id, product.description, product.imagenUrl/*, product.active*/, [], productFormulaDtoList);
 
     return productDto;
   }
