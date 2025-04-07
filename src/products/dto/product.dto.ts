@@ -43,9 +43,8 @@ export class ProductDto {
   @IsBoolean()
   hasFormula: boolean;
 
-  // @IsOptional()
-  // @IsBoolean()
-  // active: boolean;
+  @IsBoolean()
+  active: boolean;
 
   @IsOptional()
   @IsArray()
@@ -59,18 +58,18 @@ export class ProductDto {
   @Type(() => ProductFormulaDto)
   formulaList?: ProductFormulaDto[];
 
-  constructor(companyId: string, name: string, cost: number, price: number, hasFormula: boolean, id?: string, code?: string, productTypeId?: string, description?: string, imagenUrl?: string/*, active?: boolean*/, elementList?: ProductElementDto[], formulaList?: ProductFormulaDto[]) {
+  constructor(companyId: string, name: string, cost: number, price: number, hasFormula: boolean, active: boolean, id?: string, code?: string, productTypeId?: string, description?: string, imagenUrl?: string/*, active?: boolean*/, elementList?: ProductElementDto[], formulaList?: ProductFormulaDto[]) {
     this.companyId = companyId;
     this.name = name;
     this.code = code;
     this.cost = cost;
     this.price = price;
     this.hasFormula = hasFormula;
+    this.active = active;
     this.id = id;
     this.productTypeId = productTypeId;
     this.description = description;
     this.imagenUrl = imagenUrl;
-    // this.active = active;
     this.elementList = elementList;
     this.formulaList = formulaList;
   }
