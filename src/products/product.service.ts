@@ -454,6 +454,10 @@ export class ProductService {
         })
 
       })
+      .catch( error => {
+        this.logger.error(`prepareEntity: error`, error);
+        throw error;
+      })
 
     })
     
@@ -805,6 +809,11 @@ export class ProductService {
 
     if(dto.hasFormula){
 
+      if(dto.formulaList.length == 0){
+        this.logger.warn(`calculateProductCost: not executed (formula list empty)`);
+        return Promise.resolve(dto.cost);
+      }
+
       // * find formula by id
       const formulaIdList = dto.formulaList.map( (item) => item.id );
       const inputDto: SearchInputDto = new SearchInputDto(undefined, undefined, formulaIdList);
@@ -827,6 +836,11 @@ export class ProductService {
       })
 
     } else {
+
+      if(dto.elementList.length == 0){
+        this.logger.warn(`calculateProductCost: not executed (element list empty)`);
+        return Promise.resolve(dto.cost);
+      }
 
       // * find elements by id
       const elementIdList = dto.elementList.map( (item) => item.id );

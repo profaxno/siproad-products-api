@@ -25,10 +25,6 @@ FROM node:18-alpine
 WORKDIR /app
 
 # Copia solo los archivos necesarios desde la etapa de construcción
-
-# ! Descomentar para despliegues en docker dev
-# COPY --from=builder /app/.env ./
-
 COPY --from=builder /app/package.json /app/package-lock.json ./
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
