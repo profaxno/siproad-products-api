@@ -415,8 +415,15 @@ export class ProductService {
 
     const query = this.productRepository.createQueryBuilder('a')
     .leftJoinAndSelect('a.company', 'company')
+
     .leftJoinAndSelect('a.productElement', 'productElement')
+    .leftJoinAndSelect('productElement.element', 'element')
+
     .leftJoinAndSelect('a.productFormula', 'productFormula')
+    .leftJoinAndSelect('productFormula.formula', 'formula')
+    .leftJoinAndSelect('formula.formulaElement', 'formulaElement')
+    .leftJoinAndSelect('formulaElement.element', 'element2')
+
     .where('a.companyId = :companyId', { companyId })
     .andWhere('a.active = :active', { active: true });
 
