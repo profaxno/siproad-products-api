@@ -28,6 +28,10 @@ export class ApiKeyGuard implements CanActivate {
       return true;
     }
 
+    if(!apiKeyHeader){
+      this.logger.warn('x-api-key header not defined in request');
+    }
+    
     if (!apiKeyHeader || apiKeyHeader !== expectedKey) {
       throw new UnauthorizedException('request not authorized');
     }
