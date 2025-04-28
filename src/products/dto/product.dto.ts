@@ -43,8 +43,8 @@ export class ProductDto {
   @IsBoolean()
   hasFormula: boolean;
 
-  @IsBoolean()
-  active: boolean;
+  // @IsBoolean()
+  // active: boolean;
 
   @IsOptional()
   @IsArray()
@@ -65,7 +65,7 @@ export class ProductDto {
     this.cost = cost;
     this.price = price;
     this.hasFormula = hasFormula;
-    this.active = active;
+    // this.active = active;
     this.id = id;
     this.productTypeId = productTypeId;
     this.description = description;
