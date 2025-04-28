@@ -3,8 +3,7 @@ import { ProcessSummaryDto, SearchInputDto, SearchPaginationDto } from 'profaxno
 
 import { Controller, Get, Body, Patch, Param, Delete, Logger, HttpCode, HttpStatus, Query, ParseUUIDPipe, ParseArrayPipe, NotFoundException, Post } from '@nestjs/common';
 
-import { ProductDto } from './dto';
-import { ProductSearchInputDto } from './dto/product-search.dto';
+import { ProductDto, ProductSearchInputDto } from './dto';
 import { ProductService } from './product.service';
 import { AlreadyExistException, IsBeingUsedException } from '../common/exceptions/common.exception';
 

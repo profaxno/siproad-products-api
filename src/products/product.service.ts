@@ -518,7 +518,7 @@ export class ProductService {
           entity.cost         = cost;
           entity.price        = dto.price;
           entity.hasFormula   = dto.hasFormula;
-          entity.active       = dto.active;
+          // entity.active       = dto.active;
           entity.productType  = productTypeList.length > 0 ? productTypeList[0] : null;
 
           return entity;

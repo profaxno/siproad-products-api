@@ -12,6 +12,7 @@ import { Element, Company } from './entities';
 import { CompanyService } from './company.service';
 
 import { AlreadyExistException, IsBeingUsedException } from '../common/exceptions/common.exception';
+import { ElementSearchInputDto } from './dto';
 
 @Injectable()
 export class ElementService {
@@ -198,6 +199,33 @@ export class ElementService {
 
   }
 
+  searchByValues(companyId: string, paginationDto: SearchPaginationDto, inputDto: ElementSearchInputDto): Promise<ElementDto[]> {
+    const start = performance.now();
+
+    return this.searchEntitiesByValues(companyId, paginationDto, inputDto)
+    .then( (entityList: Element[]) => entityList.map( (entity) => new ElementDto(entity.company.id, entity.name, entity.cost, entity.stock, entity.unit, entity.id, entity.elementType?.id)) )
+    .then( (dtoList: ElementDto[]) => {
+      
+      if(dtoList.length == 0){
+        const msg = `elements not found, inputDto=${JSON.stringify(inputDto)}`;
+        this.logger.warn(`searchByValues: ${msg}`);
+        throw new NotFoundException(msg);
+      }
+
+      const end = performance.now();
+      this.logger.log(`searchByValues: executed, runtime=${(end - start) / 1000} seconds`);
+      return dtoList;
+    })
+    .catch(error => {
+      if(error instanceof NotFoundException)
+        throw error;
+
+      this.logger.error(`searchByValues: error`, error);
+      throw error;
+    })
+    
+  }
+
   remove(id: string): Promise<string> {
     this.logger.log(`remove: starting process... id=${id}`);
     const start = performance.now();
@@ -341,6 +369,29 @@ export class ElementService {
       this.logger.log(`save: OK, runtime=${(end - start) / 1000} seconds, entity=${JSON.stringify(entity)}`);
       return entity;
     })
+  }
+
+  private searchEntitiesByValues(companyId: string, paginationDto: SearchPaginationDto, inputDto: ElementSearchInputDto): Promise<Element[]> {
+    const {page=1, limit=this.dbDefaultLimit} = paginationDto;
+
+    const query = this.elementRepository.createQueryBuilder('a')
+    .leftJoinAndSelect('a.company', 'company')
+    .where('a.companyId = :companyId', { companyId })
+    .andWhere('a.active = :active', { active: true });
+
+    if(inputDto.name) {
+      const formatted = `%${inputDto.name?.toLowerCase().replace(' ', '%')}%`;
+      query.andWhere('a.name LIKE :name', { name: formatted });
+    }
+
+    if(inputDto.elementTypeId) {
+      query.andWhere('a.elementTypeId = :elementTypeId', { productTypeId: inputDto.elementTypeId });
+    }
+
+    return query
+    .skip((page - 1) * limit)
+    .take(limit)
+    .getMany();
   }
   
 }
