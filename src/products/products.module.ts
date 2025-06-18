@@ -2,36 +2,30 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
-import { CompanyController } from './company.controller';
-import { CompanyService } from './company.service';
+import { Company } from './companies/entities/company.entity';
+import { CompanyController } from './companies/company.controller';
+import { CompanyService } from './companies/company.service';
 
-import { ProductTypeController } from './product-type.controller';
-import { ProductTypeService } from './product-type.service';
+import { User } from './users/entities/user.entity';
+import { UserService } from './users/user.service';
 
-import { ProductController } from './product.controller';
-import { ProductService } from './product.service';
-
-import { FormulaController } from './formula.controller';
-import { FormulaService } from './formula.service';
-
-import { ElementController } from './element.controller';
-import { ElementService } from './element.service';
-
-import { ElementTypeController } from './element-type.controller';
-import { ElementTypeService } from './element-type.service';
-
-import { Company, ProductType, Product, ProductFormula, Formula, FormulaElement, Element, ElementType, ProductElement } from './entities';
+import { Product, ProductElement, ProductCategory, Movement } from './products/entities';
+import { ProductController } from './products/product.controller';
+import { ProductCategoryController } from './products/product-category.controller';
+import { ProductService } from './products/product.service';
+import { ProductCategoryService } from './products/product-category.service';
+import { MovementService } from './products/movement.service';
 
 import { DataReplicationModule } from 'src/data-transfer/data-replication/data-replication.module';
 
 @Module({
   imports: [
     ConfigModule,
-    TypeOrmModule.forFeature([Company, ProductType, Product, ProductFormula, Formula, FormulaElement, Element, ElementType, ProductElement], 'productsConn'),
+    TypeOrmModule.forFeature([Company, User, Product, ProductElement, ProductCategory, Movement], 'productsConn'),
     DataReplicationModule
   ],
-  controllers: [CompanyController, ProductTypeController, ProductController, FormulaController, ElementController, ElementTypeController],
-  providers: [CompanyService, ProductTypeService, ProductService, FormulaService, ElementService, ElementTypeService],
-  exports: [CompanyService]
+  controllers: [CompanyController, ProductCategoryController, ProductController],
+  providers: [CompanyService, ProductCategoryService, ProductService, UserService, MovementService],
+  exports: [CompanyService, UserService, MovementService]
 })
-export class ProductsModule {}
+export class ProductModule {}

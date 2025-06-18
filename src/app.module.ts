@@ -4,7 +4,7 @@ import { ConfigModule } from '@nestjs/config';
 
 import { config } from './config/app.config';
 
-import { ProductsModule } from './products/products.module';
+import { ProductModule } from './products/products.module';
 import { DataReceptionModule } from './data-transfer/data-reception/data-reception.module';
 
 @Module({
@@ -24,7 +24,7 @@ import { DataReceptionModule } from './data-transfer/data-reception/data-recepti
       synchronize: false,
       autoLoadEntities: true
     }),
-    ProductsModule,
+    ProductModule,
     DataReceptionModule
   ],
   controllers: [],
