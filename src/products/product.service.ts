@@ -144,7 +144,15 @@ export class ProductService {
     // * find product
     const inputDto: SearchInputDto = new SearchInputDto(undefined, [dto.name]);
     
-    return this.findByParams({}, inputDto, dto.companyId)
+    return this.productRepository.find({      
+      where: { 
+        name: dto.name,
+        company: { 
+          id: dto.companyId 
+        }
+      },
+    })
+    //return this.findByParams({}, inputDto, dto.companyId)
     .then( (entityList: Product[]) => {
 
       // * validate
