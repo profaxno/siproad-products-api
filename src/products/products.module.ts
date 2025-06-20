@@ -26,6 +26,6 @@ import { DataReplicationModule } from 'src/data-transfer/data-replication/data-r
   ],
   controllers: [CompanyController, ProductCategoryController, ProductController],
   providers: [CompanyService, ProductCategoryService, ProductService, UserService, MovementService],
-  exports: [CompanyService, UserService, MovementService]
+  exports: [CompanyService, UserService, ProductService, MovementService]
 })
 export class ProductModule {}
