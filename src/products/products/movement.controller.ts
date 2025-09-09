@@ -3,29 +3,28 @@ import { ProcessSummaryDto, SearchInputDto, SearchPaginationDto } from 'profaxno
 
 import { Controller, Get, Body, Patch, Param, Delete, Logger, HttpCode, HttpStatus, Query, ParseUUIDPipe, ParseArrayPipe, NotFoundException, Post } from '@nestjs/common';
 
-import { ProductDto, ProductSearchInputDto } from './dto';
-import { ProductService } from './product.service';
+import { MovementDto, MovementSearchInputDto } from './dto';
+import { MovementService } from './movement.service';
 
 import { AlreadyExistException, IsBeingUsedException } from '../../common/exceptions/common.exception';
-import { ProductSearchInputQueryDto } from './dto/product-search-input-query.dto';
 
 @Controller('products')
-export class ProductController {
+export class MovementController {
 
-  private readonly logger = new Logger(ProductController.name);
+  private readonly logger = new Logger(MovementController.name);
 
   constructor(
-    private readonly productService: ProductService
+    private readonly movementService: MovementService
   ) {}
   
   @Patch('/update')
   @HttpCode(HttpStatus.OK)
-  update(@Body() dto: ProductDto): Promise<PfxHttpResponseDto> {
+  update(@Body() dto: MovementDto): Promise<PfxHttpResponseDto> {
     this.logger.log(`>>> update: dto=${JSON.stringify(dto)}`);
     const start = performance.now();
 
-    return this.productService.update(dto)
-    .then( (dto: ProductDto) => {
+    return this.movementService.update(dto)
+    .then( (dto: MovementDto) => {
       const response = new PfxHttpResponseDto(HttpStatus.OK, 'executed', 1, [dto]);
       const end = performance.now();
       this.logger.log(`<<< update: executed, runtime=${(end - start) / 1000} seconds, response=${JSON.stringify(response)}`);
@@ -49,7 +48,7 @@ export class ProductController {
     this.logger.log(`>>> remove: id=${id}`);
     const start = performance.now();
 
-    return this.productService.remove(id)
+    return this.movementService.remove(id)
     .then( (msg: string) => {
       const response = new PfxHttpResponseDto(HttpStatus.OK, msg);
       const end = performance.now();
@@ -67,19 +66,45 @@ export class ProductController {
       return new PfxHttpResponseDto(HttpStatus.INTERNAL_SERVER_ERROR, error.message);
     })
   }
+  
+  // @Post('/synchronize/:companyId')
+  // @HttpCode(HttpStatus.OK)
+  // synchronize(
+  //   @Param('companyId', ParseUUIDPipe) companyId: string,
+  //   @Query() paginationDto: SearchPaginationDto
+  // ): Promise<PfxHttpResponseDto> {
+
+  //   this.logger.log(`>>> synchronize: companyId=${companyId}, paginationDto=${JSON.stringify(paginationDto)}`);
+  //   const start = performance.now();
+
+  //   paginationDto.page=1;
+
+  //   return this.movementService.synchronize(companyId, paginationDto)
+  //   .then( (msg: string) => {
+  //     const response = new PfxHttpResponseDto(HttpStatus.OK, msg);
+  //     const end = performance.now();
+  //     this.logger.log(`<<< synchronize: executed, runtime=${(end - start) / 1000} seconds, response=${JSON.stringify(response)}`);
+  //     return response;
+  //   })
+  //   .catch( (error: Error) => {
+  //     this.logger.error(error.stack);
+  //     return new PfxHttpResponseDto(HttpStatus.INTERNAL_SERVER_ERROR, error.message);
+  //   })
+
+  // }
 
   @Get('/searchByValues/:companyId')
   searchByValues(
     @Param('companyId', ParseUUIDPipe) companyId: string,
-    @Query() queryDto: ProductSearchInputQueryDto,
-    @Body() inputDto: ProductSearchInputDto
+    @Query() paginationDto: SearchPaginationDto,
+    @Body() inputDto: MovementSearchInputDto
   ): Promise<PfxHttpResponseDto> {
 
-    this.logger.log(`>>> searchByValues: companyId=${companyId}, queryDto=${JSON.stringify(queryDto)}, inputDto=${JSON.stringify(inputDto)}`);
+    this.logger.log(`>>> searchByValues: companyId=${companyId}, paginationDto=${JSON.stringify(paginationDto)}, inputDto=${JSON.stringify(inputDto)}`);
     const start = performance.now();
     
-    return this.productService.searchByValues(companyId, queryDto, inputDto)
-    .then( (dtoList: ProductDto[]) => {
+    return this.movementService.searchByValues(companyId, paginationDto, inputDto)
+    .then( (dtoList: MovementDto[]) => {
       const response = new PfxHttpResponseDto(HttpStatus.OK, "executed", dtoList.length, dtoList);
       const end = performance.now();
       this.logger.log(`<<< searchByValues: executed, runtime=${(end - start) / 1000} seconds, response=${JSON.stringify(response)}`);

@@ -9,7 +9,7 @@ import { CompanyService } from './companies/company.service';
 import { User } from './users/entities/user.entity';
 import { UserService } from './users/user.service';
 
-import { Product, ProductElement, ProductCategory, Movement } from './products/entities';
+import { Product, ProductElement, ProductCategory, Movement, ProductUnit } from './products/entities';
 import { ProductController } from './products/product.controller';
 import { ProductCategoryController } from './products/product-category.controller';
 import { ProductService } from './products/product.service';
@@ -17,15 +17,17 @@ import { ProductCategoryService } from './products/product-category.service';
 import { MovementService } from './products/movement.service';
 
 import { DataReplicationModule } from 'src/data-transfer/data-replication/data-replication.module';
+import { ProductUnitController } from './products/product-unit.controller';
+import { ProductUnitService } from './products/product-unit.service';
 
 @Module({
   imports: [
     ConfigModule,
-    TypeOrmModule.forFeature([Company, User, Product, ProductElement, ProductCategory, Movement], 'productsConn'),
+    TypeOrmModule.forFeature([Company, User, Product, ProductElement, ProductCategory, ProductUnit, Movement], 'productsConn'),
     DataReplicationModule
   ],
-  controllers: [CompanyController, ProductCategoryController, ProductController],
-  providers: [CompanyService, ProductCategoryService, ProductService, UserService, MovementService],
-  exports: [CompanyService, UserService, ProductService, MovementService]
+  controllers: [CompanyController, ProductController, ProductCategoryController, ProductUnitController],
+  providers: [CompanyService, ProductService, ProductCategoryService, ProductUnitService, UserService, MovementService],
+  exports: [CompanyService, UserService, ProductService, ProductUnitService, MovementService]
 })
 export class ProductModule {}

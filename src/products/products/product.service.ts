@@ -1,18 +1,15 @@
-import { Brackets, In, InsertResult, Like, Raw, Repository } from 'typeorm';
-import { isUUID } from 'class-validator';
+import { Brackets, DataSource, EntityManager, In, InsertResult, Like, Raw, Repository } from 'typeorm';
 import { ProcessSummaryDto, SearchInputDto, SearchPaginationDto } from 'profaxnojs/util';
 
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { InjectRepository } from '@nestjs/typeorm';
+import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 
-import { ProductDto, ProductSearchInputDto, ProductElementDto } from './dto';
-import { Product, ProductElement, ProductCategory } from './entities';
+import { ProductDto, ProductSearchInputDto, ProductElementDto, MovementDto } from './dto';
+import { Product, ProductElement, ProductCategory, ProductUnit } from './entities';
 import { ProductTypeEnum } from './enums';
-import { ProductCategoryService } from './product-category.service';
 
 import { Company } from '../companies/entities/company.entity';
-import { CompanyService } from '../companies/company.service';
 
 import { MessageDto } from 'src/data-transfer/dto/message.dto';
 import { JsonBasic } from 'src/data-transfer/interfaces/json-basic.interface';
@@ -20,6 +17,7 @@ import { ProcessEnum, SourceEnum } from 'src/data-transfer/enums';
 import { DataReplicationService } from 'src/data-transfer/data-replication/data-replication.service';
 
 import { AlreadyExistException, IsBeingUsedException } from '../../common/exceptions/common.exception';
+import { ProductSearchInputQueryDto } from './dto/product-search-input-query.dto';
 
 @Injectable()
 export class ProductService {
@@ -31,15 +29,14 @@ export class ProductService {
   constructor(
     private readonly ConfigService: ConfigService,
     
+    @InjectDataSource('productsConn')
+    private readonly dataSource: DataSource,
+
     @InjectRepository(Product, 'productsConn')
     private readonly productRepository: Repository<Product>,
     
     @InjectRepository(ProductElement, 'productsConn')
-    private readonly productElementRepository: Repository<ProductElement>,
-
-    private readonly companyService: CompanyService,
-    private readonly productCategoryService: ProductCategoryService,
-    private readonly replicationService: DataReplicationService
+    private readonly productElementRepository: Repository<ProductElement>
     
   ){
     this.dbDefaultLimit = this.ConfigService.get("dbDefaultLimit");
@@ -89,24 +86,24 @@ export class ProductService {
         throw new NotFoundException(msg);
       }
       
-      return entity;
-    })
-    .then( (entity: Product) => this.prepareEntity(entity, dto) )// * prepare
-    .then( (entity: Product) => this.save(entity) ) // * update
-    .then( (entity: Product) => {
+      return this.dataSource.transaction( (manager: EntityManager) => {
 
-      return (this.updateProductElement(entity, dto.elementList)) // * create/update associated entity
-      .then( (productElement: ProductElement[]) => this.generateProductWithElementList(entity, productElement, 0) ) // * generate dto
+        // * get repositories
+        const productRepository : Repository<Product> = manager.getRepository(Product);
+        const productElementRepository: Repository<ProductElement> = manager.getRepository(ProductElement);
+
+        return this.prepareEntity(entity, dto) // * prepare
+        .then( (entity: Product) => this.save(entity, productRepository) ) // * save
+        .then( (entity: Product) => {
+          return this.updateProductElement(entity, dto.elementList, productElementRepository) // * create/update associated entity
+          .then( (productElement: ProductElement[]) => this.generateProductWithElementList(entity, productElement, 0) ) // * generate dto
+        })
+
+      })
       .then( (dto: ProductDto) => {
-
-        // * replication data
-        const messageDto = new MessageDto(SourceEnum.API_PRODUCTS, ProcessEnum.PRODUCT_UPDATE, JSON.stringify([dto]));
-        this.replicationService.sendMessages([messageDto]);
-
         const end = performance.now();
         this.logger.log(`update: created OK, runtime=${(end - start) / 1000} seconds`);
         return dto;
-
       })
 
     })
@@ -117,51 +114,6 @@ export class ProductService {
       this.logger.error(`update: error=${error.message}`);
       throw error;
     })
-
-    // // * find product
-    // const inputDto: SearchInputDto = new SearchInputDto(dto.id);
-      
-    // return this.findByValue({}, inputDto)
-    // .then( (entityList: Product[]) => {
-
-    //   // * validate
-    //   if(entityList.length == 0){
-    //     const msg = `product id not found, id=${dto.id}`;
-    //     this.logger.warn(`update: not executed (${msg})`);
-    //     throw new NotFoundException(msg);
-    //   }
-
-    //   // * update
-    //   const entity = entityList[0];
-
-    //   return this.prepareEntity(entity, dto) // * prepare entity
-    //   .then( (entity: Product) => this.save(entity) ) // * create/update entity
-    //   .then( (entity: Product) => {
-
-    //     return (this.updateProductElement(entity, dto.elementList)) // * create/update associated entity
-    //     .then( (productElement: ProductElement[]) => this.generateProductWithElementList(entity, productElement, 0) ) // * generate dto
-    //     .then( (dto: ProductDto) => {
-
-    //       // * replication data
-    //       const messageDto = new MessageDto(SourceEnum.API_PRODUCTS, ProcessEnum.PRODUCT_UPDATE, JSON.stringify([dto]));
-    //       this.replicationService.sendMessages([messageDto]);
-
-    //       const end = performance.now();
-    //       this.logger.log(`update: created OK, runtime=${(end - start) / 1000} seconds`);
-    //       return dto;
-
-    //     })
-
-    //   })
-      
-    // })
-    // .catch(error => {
-    //   if(error instanceof NotFoundException)
-    //     throw error;
-      
-    //   this.logger.error(`update: error`, error);
-    //   throw error;
-    // })
 
   }
 
@@ -181,24 +133,24 @@ export class ProductService {
         throw new AlreadyExistException(msg);
       }
       
-      return new Product();
-    })
-    .then( (entity: Product) => this.prepareEntity(entity, dto) )// * prepare
-    .then( (entity: Product) => this.save(entity) ) // * update
-    .then( (entity: Product) => {
+      return this.dataSource.transaction( (manager: EntityManager) => {
 
-      return (this.updateProductElement(entity, dto.elementList)) // * create/update associated entity
-      .then( (productElement: ProductElement[]) => this.generateProductWithElementList(entity, productElement, 0) ) // * generate dto
+        // * get repositories
+        const productRepository : Repository<Product> = manager.getRepository(Product);
+        const productElementRepository: Repository<ProductElement> = manager.getRepository(ProductElement);
+
+        return this.prepareEntity(new Product(), dto) // * prepare
+        .then( (entity: Product) => this.save(entity, productRepository) ) // * save
+        .then( (entity: Product) => {
+          return (this.updateProductElement(entity, dto.elementList, productElementRepository)) // * create/update associated entity
+          .then( (productElement: ProductElement[]) => this.generateProductWithElementList(entity, productElement, 0) ) // * generate dto
+        })
+
+      })
       .then( (dto: ProductDto) => {
-
-        // * replication data
-        const messageDto = new MessageDto(SourceEnum.API_PRODUCTS, ProcessEnum.PRODUCT_UPDATE, JSON.stringify([dto]));
-        this.replicationService.sendMessages([messageDto]);
-
         const end = performance.now();
         this.logger.log(`create: created OK, runtime=${(end - start) / 1000} seconds`);
         return dto;
-
       })
 
     })
@@ -209,51 +161,6 @@ export class ProductService {
       this.logger.error(`create: error=${error.message}`);
       throw error;
     })
-
-    // // * find product
-    // const inputDto: SearchInputDto = new SearchInputDto(dto.name);
-    
-    // return this.findByValue({}, inputDto, dto.companyId)
-    // .then( (entityList: Product[]) => {
-
-    //   // * validate
-    //   if(entityList.length > 0){
-    //     const msg = `product name already exists, name=${dto.name}`;
-    //     this.logger.warn(`create: not executed (${msg})`);
-    //     throw new AlreadyExistException(msg);
-    //   }
-      
-    //   // * create
-    //   const entity = new Product();
-      
-    //   return this.prepareEntity(entity, dto) // * prepare entity
-    //   .then( (entity: Product) => this.save(entity) ) // * create/update entity
-    //   .then( (entity: Product) => {
-
-    //     return (this.updateProductElement(entity, dto.elementList)) // * create/update associated entity
-    //     .then( (productElement: ProductElement[]) => this.generateProductWithElementList(entity, productElement, 0) ) // * generate dto
-    //     .then( (dto: ProductDto) => {
-
-    //       // * replication data
-    //       const messageDto = new MessageDto(SourceEnum.API_PRODUCTS, ProcessEnum.PRODUCT_UPDATE, JSON.stringify([dto]));
-    //       this.replicationService.sendMessages([messageDto]);
-
-    //       const end = performance.now();
-    //       this.logger.log(`create: created OK, runtime=${(end - start) / 1000} seconds`);
-    //       return dto;
-
-    //     })
-
-    //   })
-
-    // })
-    // .catch(error => {
-    //   if(error instanceof NotFoundException || error instanceof AlreadyExistException)
-    //     throw error;
-
-    //   this.logger.error(`create: error`, error);
-    //   throw error;
-    // })
     
   }
 
@@ -269,7 +176,7 @@ export class ProductService {
       // * validate
       if(!entity){
         const msg = `entity not found, id=${id}`;
-        this.logger.warn(`update: not executed (${msg})`);
+        this.logger.warn(`remove: not executed (${msg})`);
         throw new NotFoundException(msg);
       }
       
@@ -279,12 +186,6 @@ export class ProductService {
     })
     .then( (entity: Product) => this.save(entity) )
     .then( (entity: Product) => {
-
-      // * replication data
-      const jsonBasic: JsonBasic = { id: entity.id }
-      const messageDto = new MessageDto(SourceEnum.API_ADMIN, ProcessEnum.USER_DELETE, JSON.stringify([jsonBasic]));
-      this.replicationService.sendMessages([messageDto]);
-
       const end = performance.now();
       this.logger.log(`remove: OK, runtime=${(end - start) / 1000} seconds`);
       return 'deleted';
@@ -295,112 +196,12 @@ export class ProductService {
 
       if(error.errno == 1217) {
         const msg = 'entity is being used';
-        this.logger.warn(`removeProduct: not executed (${msg})`, error);
+        this.logger.warn(`remove: not executed (${msg})`, error);
         throw new IsBeingUsedException(msg);
       }
 
       this.logger.error('remove: error', error);
       throw error;
-    })
-
-    // // * find product
-    // const inputDto: SearchInputDto = new SearchInputDto(id);
-    
-    // return this.findByValue({}, inputDto)
-    // .then( (entityList: Product[]) => {
-  
-    //   // * validate
-    //   if(entityList.length == 0){
-    //     const msg = `product not found, id=${id}`;
-    //     this.logger.warn(`remove: not executed (${msg})`);
-    //     throw new NotFoundException(msg);
-    //     //return new PfxHttpResponseDto(HttpStatus.NOT_FOUND, msg);
-    //   }
-      
-    //   // * delete: update field active
-    //   const entity = entityList[0];
-    //   entity.active = false;
-
-    //   return this.save(entity)
-    //   .then( (entity: Product) => {
-
-    //     // * replication data
-    //     const jsonBasic: JsonBasic = { id: entity.id }
-    //     const messageDto = new MessageDto(SourceEnum.API_PRODUCTS, ProcessEnum.PRODUCT_DELETE, JSON.stringify(jsonBasic));
-    //     this.replicationService.sendMessages([messageDto]);
-
-    //     const end = performance.now();
-    //     this.logger.log(`remove: OK, runtime=${(end - start) / 1000} seconds`);
-    //     return 'deleted';
-    //     //return new PfxHttpResponseDto(HttpStatus.OK, 'delete OK');
-    //   })
-
-    // })
-    // .catch(error => {
-    //   if(error instanceof NotFoundException)
-    //     throw error;
-
-    //   if(error.errno == 1217) {
-    //     const msg = 'product is being used';
-    //     this.logger.warn(`remove: not executed (${msg})`, error);
-    //     throw new IsBeingUsedException(msg);
-    //     //return new PfxHttpResponseDto(HttpStatus.BAD_REQUEST, 'product is being used');
-    //   }
-
-    //   this.logger.error('remove: error', error);
-    //   throw error;
-    // })
-
-  }
-
-  synchronize(companyId: string, paginationDto: SearchPaginationDto): Promise<string> {
-    this.logger.warn(`synchronize: starting process... companyId=${companyId}, paginationDto=${JSON.stringify(paginationDto)}`);
-
-    // * find all
-    return this.findAll(paginationDto, companyId)
-    .then( (entityList: Product[]) => {
-      
-      // * validate
-      if(entityList.length == 0){
-        const msg = 'executed';
-        this.logger.log(`synchronize: ${msg}`);
-        return msg;
-      }
-
-      const updateDtoList: ProductDto[] = entityList.reduce( (acc, value) => {
-        if(value.active)
-          acc.push(new ProductDto(value.company.id, value.name, value.cost, value.type, value.enable4Sale, value.id, value.productCategory?.id, value.code, value.description, value.unit, value.price));          
-        return acc;
-      }, []);
-
-      const deleteList: JsonBasic[] = entityList.reduce( (acc, value) => {
-        if(!value.active)
-          acc.push({ id: value.id });
-        return acc;
-      }, []);
-
-      const updateMessage = new MessageDto(SourceEnum.API_ADMIN, ProcessEnum.PRODUCT_UPDATE, JSON.stringify(updateDtoList));
-      const deleteMessage = new MessageDto(SourceEnum.API_ADMIN, ProcessEnum.PRODUCT_DELETE, JSON.stringify(deleteList));
-
-      // // * generate message list
-      // const messageDtoList: MessageDto[] = entityList.map( value => {
-      //   const process = value.active ? ProcessEnum.PRODUCT_UPDATE : ProcessEnum.PRODUCT_DELETE;
-      //   const dto = this.generateProductWithElementList(value, value.productElement, 0);
-      //   return new MessageDto(SourceEnum.API_PRODUCTS, process, JSON.stringify(dto));
-      // })
-      
-      // * replication data
-      return this.replicationService.sendMessages([updateMessage, deleteMessage])
-      .then( () => {
-        paginationDto.page++;
-        return this.synchronize(companyId, paginationDto);
-      })
-      
-    })
-    .catch( error => {
-      const msg = `not executed (unexpected error)`;
-      this.logger.error(`synchronize: ${msg}, paginationDto=${JSON.stringify(paginationDto)}`, error);
-      return msg;
     })
 
   }
@@ -434,11 +235,11 @@ export class ProductService {
     
   // }
 
-  searchByValues(companyId: string, paginationDto: SearchPaginationDto, inputDto: ProductSearchInputDto): Promise<ProductDto[]> {
+  searchByValues(companyId: string, queryDto: ProductSearchInputQueryDto, inputDto: ProductSearchInputDto): Promise<ProductDto[]> {
     const start = performance.now();
 
-    return this.searchEntitiesByValues(companyId, paginationDto, inputDto)
-    .then( (entityList: Product[]) => entityList.map( (entity) => this.generateProductWithElementList(entity, entity.productElement, 0) ) )
+    return this.searchEntitiesByValues(companyId, queryDto, inputDto)
+    .then( (entityList: Product[]) => entityList.map( (entity) =>  queryDto.withMovements ? this.generateProductWithMovementList(entity) : this.generateProductWithElementList(entity, entity.productElement, 0) ) )
     .then( (dtoList: ProductDto[]) => {
       
       if(dtoList.length == 0){
@@ -470,6 +271,9 @@ export class ProductService {
       const productCategory = new ProductCategory();
       productCategory.id = dto.productCategoryId;
 
+      const productUnit = new ProductUnit();
+      productUnit.id = dto.productUnitId;
+
       entity.id           = dto.id ? dto.id : undefined;
       entity.company      = company;
       entity.name         = dto.name.toUpperCase();
@@ -480,7 +284,8 @@ export class ProductService {
       entity.price        = dto.price;
       entity.type         = dto.type;
       entity.enable4Sale  = dto.enable4Sale;
-      entity.productCategory  = dto.productCategoryId ? productCategory : undefined;
+      entity.productCategory = dto.productCategoryId ? productCategory : undefined;
+      entity.productUnit  = dto.productUnitId ? productUnit : undefined;
 
       return Promise.resolve(entity);
 
@@ -531,12 +336,15 @@ export class ProductService {
     
   }
 
-  private save(entity: Product): Promise<Product> {
+  private save(entity: Product, productRepository?: Repository<Product>): Promise<Product> {
     const start = performance.now();
 
-    const newEntity: Product = this.productRepository.create(entity);
+    if(!productRepository)
+      productRepository = this.productRepository;
 
-    return this.productRepository.save(newEntity)
+    const newEntity: Product = productRepository.create(entity);
+
+    return productRepository.save(newEntity)
     .then( (entity: Product) => {
       const end = performance.now();
       this.logger.log(`save: OK, runtime=${(end - start) / 1000} seconds, entity=${JSON.stringify(entity)}`);
@@ -544,7 +352,7 @@ export class ProductService {
     })
   }
 
-  private updateProductElement(product: Product, productElementDtoList: ProductElementDto[] = []): Promise<ProductElement[]> {
+  private updateProductElement(product: Product, productElementDtoList: ProductElementDto[] = [], productElementRepository: Repository<ProductElement>): Promise<ProductElement[]> {
     this.logger.log(`updateProductElement: starting process... product=${JSON.stringify(product)}, productElementDtoList=${JSON.stringify(productElementDtoList)}`);
     const start = performance.now();
 
@@ -567,55 +375,116 @@ export class ProductService {
         throw new NotFoundException(msg);
       }
 
-      // * create productElement
-      return this.productElementRepository.findBy( { product } ) // * find productElement
-      .then( (productElementList: ProductElement[]) => this.productElementRepository.remove(productElementList)) // * remove productElements
+      // * create product-element
+      return productElementRepository.find({
+        where: { product },
+      })
+      .then( (productElementList: ProductElement[]) => productElementRepository.remove(productElementList)) // * remove productElements
       .then( () => {
         
-        // * generate product element list
+        // * generate list to insert
         const productElementList: ProductElement[] = elementList.map( (element: Product) => {
           const productElement = new ProductElement();
           productElement.product = product;
           productElement.element = element;
           productElement.qty = productElementDtoList.find( (value) => value.element.id == element.id).qty;
-          return productElement;
+          return  productElementRepository.create(productElement);
         })
-  
-        // * bulk insert
-        return this.bulkInsertProductElements(productElementList)
-        .then( (productElementList: ProductElement[]) => {
+
+        return productElementRepository
+        .createQueryBuilder()
+        .insert()
+        .into(ProductElement)
+        .values(productElementList)
+        .execute()
+        .then( (insertResult: InsertResult) => {
           const end = performance.now();
-          this.logger.log(`updateProductElement: OK, runtime=${(end - start) / 1000} seconds`);
+          this.logger.log(`updateProductElement: OK, runtime=${(end - start) / 1000} seconds, insertResult=${JSON.stringify(insertResult.raw)}`);
           return productElementList;
         })
 
       })
 
     })
-
-  }
-
-  private bulkInsertProductElements(productElementList: ProductElement[]): Promise<ProductElement[]> {
-    const start = performance.now();
-    this.logger.log(`bulkInsertProductElements: starting process... listSize=${productElementList.length}`);
-
-    const newProductElementList: ProductElement[] = productElementList.map( (value) => this.productElementRepository.create(value));
-    
-    return this.productElementRepository.manager.transaction( async(transactionalEntityManager) => {
-      
-      return transactionalEntityManager
-        .createQueryBuilder()
-        .insert()
-        .into(ProductElement)
-        .values(newProductElementList)
-        .execute()
-        .then( (insertResult: InsertResult) => {
-          const end = performance.now();
-          this.logger.log(`bulkInsertProductElements: OK, runtime=${(end - start) / 1000} seconds, insertResult=${JSON.stringify(insertResult.raw)}`);
-          return newProductElementList;
-        })
+    .catch(error => {
+      this.logger.error(`updateProductElement: error=${error.message}`);
+      throw error;
     })
+
   }
+
+  // private updateProductElement(product: Product, productElementDtoList: ProductElementDto[] = []): Promise<ProductElement[]> {
+  //   this.logger.log(`updateProductElement: starting process... product=${JSON.stringify(product)}, productElementDtoList=${JSON.stringify(productElementDtoList)}`);
+  //   const start = performance.now();
+
+  //   if(productElementDtoList.length == 0){
+  //     this.logger.warn(`updateProductElement: not executed (product element list empty)`);
+  //     return Promise.resolve([]);
+  //   }
+
+  //   // * find elements by id
+  //   const elementIdList = productElementDtoList.map( (item) => item.element.id );
+  //   // const inputDto: SearchInputDto = new SearchInputDto(undefined, undefined, elementIdList);
+
+  //   return this.findByIds({}, elementIdList)
+  //   .then( (elementList: Product[]) => {
+
+  //     // * validate
+  //     if(elementList.length !== elementIdList.length){
+  //       const elementIdNotFoundList: string[] = elementIdList.filter( (id) => !elementList.find( (element) => element.id == id) );
+  //       const msg = `elements not found, idList=${JSON.stringify(elementIdNotFoundList)}`;
+  //       throw new NotFoundException(msg);
+  //     }
+
+  //     // * create productElement
+  //     return this.productElementRepository.findBy( { product } ) // * find productElement
+  //     .then( (productElementList: ProductElement[]) => this.productElementRepository.remove(productElementList)) // * remove productElements
+  //     .then( () => {
+        
+  //       // * generate product element list
+  //       const productElementList: ProductElement[] = elementList.map( (element: Product) => {
+  //         const productElement = new ProductElement();
+  //         productElement.product = product;
+  //         productElement.element = element;
+  //         productElement.qty = productElementDtoList.find( (value) => value.element.id == element.id).qty;
+  //         return productElement;
+  //       })
+  
+  //       // * bulk insert
+  //       return this.bulkInsertProductElements(productElementList)
+  //       .then( (productElementList: ProductElement[]) => {
+  //         const end = performance.now();
+  //         this.logger.log(`updateProductElement: OK, runtime=${(end - start) / 1000} seconds`);
+  //         return productElementList;
+  //       })
+
+  //     })
+
+  //   })
+
+  // }
+
+  // private bulkInsertProductElements(productElementList: ProductElement[]): Promise<ProductElement[]> {
+  //   const start = performance.now();
+  //   this.logger.log(`bulkInsertProductElements: starting process... listSize=${productElementList.length}`);
+
+  //   const newProductElementList: ProductElement[] = productElementList.map( (value) => this.productElementRepository.create(value));
+    
+  //   return this.productElementRepository.manager.transaction( async(transactionalEntityManager) => {
+      
+  //     return transactionalEntityManager
+  //       .createQueryBuilder()
+  //       .insert()
+  //       .into(ProductElement)
+  //       .values(newProductElementList)
+  //       .execute()
+  //       .then( (insertResult: InsertResult) => {
+  //         const end = performance.now();
+  //         this.logger.log(`bulkInsertProductElements: OK, runtime=${(end - start) / 1000} seconds, insertResult=${JSON.stringify(insertResult.raw)}`);
+  //         return newProductElementList;
+  //       })
+  //   })
+  // }
 
   private findAll(paginationDto: SearchPaginationDto, companyId: string): Promise<Product[]> {
     const {page=1, limit=this.dbDefaultLimit} = paginationDto;
@@ -645,14 +514,113 @@ export class ProductService {
     
   }
 
-  private searchEntitiesByValues(companyId: string, paginationDto: SearchPaginationDto, inputDto: ProductSearchInputDto): Promise<Product[]> {
+  // private searchEntitiesByValues(companyId: string, paginationDto: SearchPaginationDto, inputDto: ProductSearchInputDto): Promise<Product[]> {
+  //   const {page=1, limit=this.dbDefaultLimit} = paginationDto;
+
+  //   let query = this.productRepository.createQueryBuilder('p')
+  //   .leftJoinAndSelect('p.company', 'c')
+  //   .leftJoinAndSelect('p.productUnit', 'pu')
+  //   .leftJoinAndSelect('p.productElement', 'pe')
+  //   .leftJoinAndSelect('pe.element', 'e')
+  //   .leftJoinAndSelect('e.company', 'c2')
+  //   .where('p.companyId = :companyId', { companyId })
+  //   .andWhere('p.active = :active', { active: true });
+
+  //   .leftJoinAndSelect('p.productUnit', 'pu')
+  //   .leftJoinAndSelect('p.movement', 'm')
+
+  //   if(inputDto.nameCode) {
+  //     const formatted = `%${inputDto.nameCode?.toLowerCase().replace(' ', '%')}%`;
+  //     query.andWhere(
+  //       new Brackets(qb => {
+  //         qb.where('p.name LIKE :name').orWhere('p.code LIKE :code');
+  //       }),
+  //       {
+  //         name: formatted,
+  //         code: formatted,
+  //       }
+  //     );
+  //   }
+
+  //   if (inputDto.productTypeList?.length > 0) {
+  //     query.andWhere('p.type IN (:...productTypeList)', { productTypeList: inputDto.productTypeList});
+  //   }
+
+  //   if(inputDto.productCategoryId) {
+  //     query.andWhere('p.productCategoryId = :productCategoryId', { productCategoryId: inputDto.productCategoryId });
+  //   }
+
+  //   return query
+  //   .skip((page - 1) * limit)
+  //   .take(limit)
+  //   .getMany();
+  // }
+
+  private searchEntitiesByValues(companyId: string, queryDto: ProductSearchInputQueryDto, inputDto: ProductSearchInputDto): Promise<Product[]> {
+    const {page=1, limit=this.dbDefaultLimit} = queryDto;
+
+    let query = this.productRepository.createQueryBuilder('p')
+    .leftJoinAndSelect('p.company', 'c')
+    .leftJoinAndSelect('p.productUnit', 'pu')
+    
+    if(queryDto.withMovements) {
+      query
+      .leftJoinAndSelect('p.movement', 'm')
+      .leftJoinAndSelect('m.product', 'p2')
+      .leftJoinAndSelect('m.user', 'u')
+
+    } else {
+      query
+      .leftJoinAndSelect('p.productElement', 'pe')
+      .leftJoinAndSelect('pe.element', 'e')
+      .leftJoinAndSelect('e.company', 'c2')
+    }
+
+    query
+    .where('p.companyId = :companyId', { companyId })
+    .andWhere('p.active = :active', { active: true });
+
+    if(inputDto.nameCode) {
+      const formatted = `%${inputDto.nameCode?.toLowerCase().replace(' ', '%')}%`;
+      query.andWhere(
+        new Brackets(qb => {
+          qb.where('p.name LIKE :name').orWhere('p.code LIKE :code');
+        }),
+        {
+          name: formatted,
+          code: formatted,
+        }
+      );
+    }
+
+    if (inputDto.productTypeList?.length > 0) {
+      query.andWhere('p.type IN (:...productTypeList)', { productTypeList: inputDto.productTypeList});
+    }
+
+    if(inputDto.productCategoryId) {
+      query.andWhere('p.productCategoryId = :productCategoryId', { productCategoryId: inputDto.productCategoryId });
+    }
+
+    if(inputDto.enable4Sale != undefined) {
+      query.andWhere('p.enable4Sale = :enable4Sale', { enable4Sale: inputDto.enable4Sale });
+    }
+
+    query.orderBy('p.name', 'ASC');
+    query.addOrderBy('p.id', 'ASC');
+
+    return query
+    .skip((page - 1) * limit)
+    .take(limit)
+    .getMany();
+  }
+
+  private searchEntitiesWithMovementsByValues(companyId: string, paginationDto: SearchPaginationDto, inputDto: ProductSearchInputDto): Promise<Product[]> {
     const {page=1, limit=this.dbDefaultLimit} = paginationDto;
 
     const query = this.productRepository.createQueryBuilder('p')
     .leftJoinAndSelect('p.company', 'c')
-    .leftJoinAndSelect('p.productElement', 'pe')
-    .leftJoinAndSelect('pe.element', 'e')
-    .leftJoinAndSelect('e.company', 'c2')
+    .leftJoinAndSelect('p.productUnit', 'pu')
+    .leftJoinAndSelect('p.movement', 'm')
     .where('p.companyId = :companyId', { companyId })
     .andWhere('p.active = :active', { active: true });
 
@@ -682,7 +650,7 @@ export class ProductService {
     .take(limit)
     .getMany();
   }
-
+  
   private findByIds(paginationDto: SearchPaginationDto, idList: string[]): Promise<Product[]> {
     const {page=1, limit=this.dbDefaultLimit} = paginationDto;
     
@@ -804,7 +772,7 @@ export class ProductService {
   private generateProductWithElementList(product: Product, productElementList: ProductElement[] = [], level: number): ProductDto {
 
     if(level == 2) {
-      const productDto = new ProductDto(product.company.id, product.name, product.cost, product.type, product.enable4Sale, product.id, product.productCategory?.id, product.code, product.description, product.unit, product.price, []);
+      const productDto = new ProductDto(product.company.id, product.name, product.cost, product.type, product.enable4Sale, product.id, product.productCategory?.id, product.productUnit?.id, product.code, product.description, product.unit, product.price, []);
       return productDto;
     }
 
@@ -818,7 +786,7 @@ export class ProductService {
     }
 
     // * generate product dto
-    const productDto = new ProductDto(product.company.id, product.name, product.cost, product.type, product.enable4Sale, product.id, product.productCategory?.id, product.code, product.description, product.unit, product.price, productElementDtoList);
+    const productDto = new ProductDto(product.company.id, product.name, product.cost, product.type, product.enable4Sale, product.id, product.productCategory?.id, product.productUnit?.id, product.code, product.description, product.unit, product.price, productElementDtoList);
     return productDto;
   }
 
@@ -844,4 +812,9 @@ export class ProductService {
     return cost;
   }
 
+  private generateProductWithMovementList(product: Product): ProductDto {
+    const movementDtoList = product.movement.map(value => new MovementDto(value.type, value.reason, value.qty, value.product?.id, value.user?.id, value.id, value.relatedId))
+    const productDto = new ProductDto(product.company.id, product.name, product.cost, product.type, product.enable4Sale, product.id, product.productCategory?.id, product.productUnit?.id, product.code, product.description, product.unit, product.price, [], movementDtoList);
+    return productDto;
+  }
 }

@@ -8,6 +8,9 @@ export class Movement {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
+  @Column('varchar', { length: 100 })
+  relatedId: string;
+  
   @Column('tinyint', { default: 1, unsigned: true })
   type: number;
 
@@ -22,9 +25,6 @@ export class Movement {
 
   @Column('boolean', { default: true })
   active: boolean
-
-  @Column('varchar', { length: 100 })
-  relatedId: string;
 
   @ManyToOne(
     () => Product,

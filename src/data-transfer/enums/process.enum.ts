@@ -8,5 +8,7 @@ export enum ProcessEnum {
     PRODUCT_CATEGORY_UPDATE = 'productCategoryUpdate',
     PRODUCT_CATEGORY_DELETE = 'productCategoryDelete',
     MOVEMENT_UPDATE     = 'movementUpdate',
-    MOVEMENT_DELETE     = 'movementDelete'
+    MOVEMENT_DELETE     = 'movementDelete',
+    PRODUCT_UNIT_UPDATE = 'productUnitUpdate',
+    PRODUCT_UNIT_DELETE = 'productUnitDelete'
 }

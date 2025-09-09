@@ -7,6 +7,10 @@ export class MovementDto {
   @IsUUID()
   id?: string;
 
+  @IsOptional()
+  @IsUUID()
+  relatedId?: string;
+  
   @IsIn([MovementTypeEnum.OUT, MovementTypeEnum.IN])
   type: number;
 
@@ -15,10 +19,6 @@ export class MovementDto {
 
   @IsNumber()
   qty: number;
-
-  @IsOptional()
-  @IsUUID()
-  relatedId?: string;
 
   @IsUUID()
   productId: string;

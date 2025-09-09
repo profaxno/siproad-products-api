@@ -136,7 +136,7 @@ export class CompanyService {
     .then( (entity: Company) => {
 
       // * validate
-      if(entity){
+      if(entity) {
         const msg = `name already exists, name=${dto.name}`;
         this.logger.warn(`create: not executed (${msg})`);
         throw new AlreadyExistException(msg);

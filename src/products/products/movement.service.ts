@@ -1,16 +1,17 @@
-import { Brackets, In, InsertResult, Like, Raw, Repository } from 'typeorm';
+import { Brackets, DataSource, EntityManager, In, InsertResult, Like, Raw, Repository } from 'typeorm';
 import { DateFormatEnum, ProcessSummaryDto, SearchInputDto, SearchPaginationDto } from 'profaxnojs/util';
 
 import * as moment from 'moment-timezone';
 
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { InjectRepository } from '@nestjs/typeorm';
+import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 
 import { User } from '../users/entities/user.entity';
 
 import { MovementDto, MovementSearchInputDto } from './dto';
 import { Movement, Product } from './entities';
+import { IsBeingUsedException } from 'src/common/exceptions/common.exception';
 
 @Injectable()
 export class MovementService {
@@ -22,6 +23,9 @@ export class MovementService {
   constructor(
     private readonly ConfigService: ConfigService,
     
+    @InjectDataSource('productsConn')
+    private readonly dataSource: DataSource,
+
     @InjectRepository(Movement, 'productsConn')
     private readonly movementRepository: Repository<Movement>,
 
@@ -29,94 +33,159 @@ export class MovementService {
     this.dbDefaultLimit = this.ConfigService.get("dbDefaultLimit");
   }
 
-  update(dtoList: MovementDto[]): Promise<void> {
-    this.logger.warn(`update: starting process... dtoList=${JSON.stringify(dtoList)}`);
+  update(dto: MovementDto): Promise<MovementDto> {
+    if(!dto.id)
+      return this.create(dto); // * create
+    
+    this.logger.warn(`update: starting process... dto=${JSON.stringify(dto)}`);
     const start = performance.now();
 
-    const relatedId = dtoList[0].relatedId;
+    // * update no implemented
+  }
 
-    return this.remove(relatedId)
-    .then( () => dtoList.map( (value) => this.prepareEntity(new Movement(), value) ) )
-    .then( (entityList: Movement[]) => this.bulkInsert(entityList) )
-    .then( (entityList: Movement[]) => {
+  create(dto: MovementDto): Promise<MovementDto> {
+    this.logger.warn(`create: starting process... dto=${JSON.stringify(dto)}`);
+    const start = performance.now();
+
+    const entity: Movement = this.prepareEntity(new Movement(), dto) // * prepare
+
+    return this.save(entity) // * update
+    .then( (entity: Movement) => {
+      const dto = new MovementDto(entity.type, entity.reason, entity.qty, entity.product.id, entity.user.id, entity.id, entity.relatedId);
+
       const end = performance.now();
-      this.logger.log(`update: OK, runtime=${(end - start) / 1000} seconds`);
+      this.logger.log(`create: created OK, runtime=${(end - start) / 1000} seconds`);
+      return dto;
+    })
+    .catch(error => {
+      this.logger.error(`create: error=${error.message}`);
+      throw error;
     })
 
   }
 
-  remove(relatedId: string): Promise<void> {
-    this.logger.warn(`remove: starting process... relatedId=${relatedId}`);
+  remove(id: string): Promise<string> {
+    this.logger.warn(`remove: starting process... id=${id}`);
     const start = performance.now();
 
-    return this.movementRepository
-    .createQueryBuilder('a')
-    .where('a.relatedId = :relatedId', { relatedId })
-    .getMany()
+    return this.movementRepository.findOne({
+      where: { id },
+    })
+    .then( (entity: Movement) => {
+
+      // * validate
+      if(!entity){
+        const msg = `entity not found, id=${id}`;
+        this.logger.warn(`remove: not executed (${msg})`);
+        throw new NotFoundException(msg);
+      }
+      
+      // * delete: update field active
+      entity.active = false;
+      return entity;
+    })
+    .then( (entity: Movement) => this.movementRepository.remove(entity) )
+    .then( (entity: Movement) => {
+
+      const end = performance.now();
+      this.logger.log(`remove: OK, runtime=${(end - start) / 1000} seconds`);
+      return 'deleted';
+    })
+    .catch(error => {
+      if(error instanceof NotFoundException)
+        throw error;
+
+      if(error.errno == 1217) {
+        const msg = 'entity is being used';
+        this.logger.warn(`remove: not executed (${msg})`, error);
+        throw new IsBeingUsedException(msg);
+      }
+
+      this.logger.error('remove: error', error);
+      throw error;
+    })
+
+  }
+
+  bulkUpdate(dtoList: MovementDto[]): Promise<void> {
+    const start = performance.now();
+
+    // * process with transaction db
+    return this.dataSource.transaction( (manager: EntityManager) => {
+
+      // * get repositories
+      const movementRepository: Repository<Movement> = manager.getRepository(Movement);
+      
+      // * get relatedId
+      const relatedId = dtoList[0].relatedId;
+
+      return this.bulkRemoveByRelatedId(relatedId, movementRepository) // * remove movements
+      .then( () => dtoList.map( (value) => this.prepareEntity(new Movement(), value) ) ) // * prepare entities
+      .then( (entityList: Movement[]) => this.bulkInsert(entityList, movementRepository) ) // * bulk insert
+
+    })
+    .then( (entityList: Movement[]) => {
+      const end = performance.now();
+      this.logger.log(`bulkUpdate: OK, runtime=${(end - start) / 1000} seconds`);
+    })
+
+  }
+
+  bulkRemoveByRelatedId(relatedId: string, movementRepository?: Repository<Movement>): Promise<void> {
+    this.logger.warn(`bulkRemoveByRelatedId: starting process... relatedId=${relatedId}`);
+    const start = performance.now();
+
+    if(!movementRepository)
+      movementRepository = this.movementRepository;
+
+    return movementRepository.find({
+      where: { relatedId },
+    })
     .then( (movementList: Movement[]) => {
       if(movementList.length > 0)
-        return this.movementRepository.remove(movementList);
+        return movementRepository.remove(movementList);
       return [];
     })
     .then( (entityList: Movement[]) => {
       const end = performance.now();
-      this.logger.log(`remove: OK, runtime=${(end - start) / 1000} seconds`);
+      this.logger.log(`bulkRemoveByRelatedId: OK, runtime=${(end - start) / 1000} seconds`);
     })
+
+    // return movementRepository
+    // .createQueryBuilder('a')
+    // .where('a.relatedId = :relatedId', { relatedId })
+    // .getMany()
+    // .then( (movementList: Movement[]) => {
+    //   if(movementList.length > 0)
+    //     return movementRepository.remove(movementList);
+    //   return [];
+    // })
+    // .then( (entityList: Movement[]) => {
+    //   const end = performance.now();
+    //   this.logger.log(`removeByRelatedId: OK, runtime=${(end - start) / 1000} seconds`);
+    // })
 
   }
 
-  private bulkInsert(entityList: Movement[]): Promise<Movement[]> {
+  private bulkInsert(entityList: Movement[], movementRepository: Repository<Movement>): Promise<Movement[]> {
     const start = performance.now();
     this.logger.log(`bulkInsert: starting process... listSize=${entityList.length}`);
 
-    const newEntityList: Movement[] = entityList.map( (value) => this.movementRepository.create(value));
-    
-    try {
-      return this.movementRepository.manager.transaction( async(transactionalEntityManager) => {
-        
-        return transactionalEntityManager
-        .createQueryBuilder()
-        .insert()
-        .into(Movement)
-        .values(newEntityList)
-        .execute()
-        .then( (insertResult: InsertResult) => {
-          const end = performance.now();
-          this.logger.log(`bulkInsert: OK, runtime=${(end - start) / 1000} seconds, insertResult=${JSON.stringify(insertResult.raw)}`);
-          return newEntityList;
-        })
-
-      })
-
-    } catch (error) {
-      this.logger.error(`bulkInsert: error=${error.message}`);
-      throw error;
-    }
-  }
-
-  // create(dto: MovementDto): Promise<MovementDto> {
-  //   this.logger.warn(`create: starting process... dto=${JSON.stringify(dto)}`);
-  //   const start = performance.now();
-
-  //   try {
-  //      const entity = new Movement();
-      
-  //     return this.prepareEntity(entity, dto) // * prepare entity
-  //     .then( (entity: Movement) => this.save(entity) ) // * create/update entity
-  //     .then( (entity: Movement) => {
-  //       const dto = new MovementDto(entity.type, entity.reason, entity.qty, entity.product?.id, entity.user?.id, entity.id, entity.relatedId);
+    const newEntityList: Movement[] = entityList.map( (value) => movementRepository.create(value));
        
-  //       const end = performance.now();
-  //       this.logger.log(`create: created OK, runtime=${(end - start) / 1000} seconds`);
-  //       return dto;
-  //     })
-
-  //   } catch (error) {
-  //     this.logger.error(`create: error`, error);
-  //     throw error;
-  //   }
-
-  // }
+    return movementRepository
+    .createQueryBuilder()
+    .insert()
+    .into(Movement)
+    .values(newEntityList)
+    .execute()
+    .then( (insertResult: InsertResult) => {
+      const end = performance.now();
+      this.logger.log(`bulkInsert: OK, runtime=${(end - start) / 1000} seconds, insertResult=${JSON.stringify(insertResult.raw)}`);
+      return newEntityList;
+    })
+      
+  }
 
   searchByValues(companyId: string, paginationDto: SearchPaginationDto, inputDto: MovementSearchInputDto): Promise<MovementDto[]> {
     const start = performance.now();
@@ -144,51 +213,6 @@ export class MovementService {
     })
     
   }
-
-  // remove(relatedId: string): Promise<string> {
-  //   this.logger.warn(`remove: starting process... id=${relatedId}`);
-  //   const start = performance.now();
-
-  //   // * find movement
-  //   return this.movementRepository.findBy({ relatedId })
-  //   .then( (entityList: Movement[]) => {
-  
-  //     // * validate
-  //     if(entityList.length == 0){
-  //       const msg = `movement not found, relatedId=${relatedId}`;
-  //       this.logger.warn(`remove: not executed (${msg})`);
-  //       throw new NotFoundException(msg);
-  //     }
-      
-  //     // * delete: update field active
-  //     const entity = entityList[0];
-  //     entity.active = false;
-
-  //     return this.save(entity)
-  //     .then( (entity: Movement) => {
-
-  //       const end = performance.now();
-  //       this.logger.log(`remove: OK, runtime=${(end - start) / 1000} seconds`);
-  //       return 'deleted';
-  //     })
-
-  //   })
-  //   .catch(error => {
-  //     if(error instanceof NotFoundException)
-  //       throw error;
-
-  //     if(error.errno == 1217) {
-  //       const msg = 'movement is being used';
-  //       this.logger.warn(`remove: not executed (${msg})`, error);
-  //       throw new IsBeingUsedException(msg);
-  //       //return new PfxHttpResponseDto(HttpStatus.BAD_REQUEST, 'movement is being used');
-  //     }
-
-  //     this.logger.error('remove: error', error);
-  //     throw error;
-  //   })
-
-  // }
 
   private searchEntitiesByValues(companyId: string, paginationDto: SearchPaginationDto, inputDto: MovementSearchInputDto): Promise<Movement[]> {
     const {page=1, limit=this.dbDefaultLimit} = paginationDto;
@@ -231,13 +255,13 @@ export class MovementService {
     const user = new User();
     user.id = dto.userId;
 
-    try {  
+    try {
       // * prepare entity
       entity.id         = dto.id ? dto.id : undefined;
+      entity.relatedId  = dto.relatedId ? dto.relatedId : undefined;
       entity.type       = dto.type;
       entity.reason     = dto.reason;
       entity.qty        = dto.qty;
-      entity.relatedId  = dto.relatedId ? dto.relatedId : undefined;
       entity.product    = product;
       entity.user       = user;
 
@@ -250,17 +274,17 @@ export class MovementService {
     
   }
 
-  // private save(entity: Movement): Promise<Movement> {
-  //   const start = performance.now();
+  private save(entity: Movement): Promise<Movement> {
+    const start = performance.now();
 
-  //   const newEntity: Movement = this.movementRepository.create(entity);
+    const newEntity: Movement = this.movementRepository.create(entity);
 
-  //   return this.movementRepository.save(newEntity)
-  //   .then( (entity: Movement) => {
-  //     const end = performance.now();
-  //     this.logger.log(`save: OK, runtime=${(end - start) / 1000} seconds, entity=${JSON.stringify(entity)}`);
-  //     return entity;
-  //   })
-  // }
+    return this.movementRepository.save(newEntity)
+    .then( (entity: Movement) => {
+      const end = performance.now();
+      this.logger.log(`save: OK, runtime=${(end - start) / 1000} seconds, entity=${JSON.stringify(entity)}`);
+      return entity;
+    })
+  }
 
 }

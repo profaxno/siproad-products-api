@@ -3,6 +3,7 @@ import { Company } from "src/products/companies/entities/company.entity";
 import { ProductCategory } from "./product-category.entity";
 import { ProductElement } from "./product-element.entity";
 import { Movement } from "./movement.entity";
+import { ProductUnit } from "./product-unit.entity";
 
 @Entity("pro_product")
 export class Product {
@@ -57,6 +58,13 @@ export class Product {
   )
   productCategory: ProductCategory;
   
+  @ManyToOne(
+    () => ProductUnit,
+    (productUnit) => productUnit.product,
+    { eager: true }
+  )
+  productUnit: ProductUnit;
+
   @OneToMany(
     () => ProductElement,
     (productElement) => productElement.product,

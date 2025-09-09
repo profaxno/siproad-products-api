@@ -1,6 +1,8 @@
 import { IsArray, IsBoolean, IsIn, IsInt, IsNumber, IsOptional, IsPositive, IsString, IsUUID, MaxLength, ValidateNested } from "class-validator";
 import { Type } from "class-transformer";
 import { ProductTypeEnum, UnitMeasuresEnum } from "../enums";
+import { MovementDto } from "./movement.dto";
+import { Movement } from '../entities/movement.entity';
 
 export class ProductDto {
   
@@ -14,6 +16,10 @@ export class ProductDto {
   @IsOptional()
   @IsUUID()
   productCategoryId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  productUnitId?: string;
 
   @IsString()
   @MaxLength(100)
@@ -53,7 +59,14 @@ export class ProductDto {
   @Type(() => ProductElementDto)
   elementList?: ProductElementDto[];
 
-  constructor(companyId: string, name: string, cost: number, type: number, enable4Sale: boolean, id?: string, productCategoryId?: string, code?: string, description?: string, unit?: string, price?: number, elementList?: ProductElementDto[]) {
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => MovementDto)
+  movementList?: MovementDto[];
+
+
+  constructor(companyId: string, name: string, cost: number, type: number, enable4Sale: boolean, id?: string, productCategoryId?: string, productUnitId?: string, code?: string, description?: string, unit?: string, price?: number, elementList?: ProductElementDto[], movementList?: MovementDto[]) {
     this.companyId = companyId;
     this.name = name;
     this.cost = cost;
@@ -61,11 +74,13 @@ export class ProductDto {
     this.enable4Sale = enable4Sale;
     this.id = id;
     this.productCategoryId = productCategoryId;
+    this.productUnitId = productUnitId;
     this.code = code;
     this.description = description;
     this.unit = unit;
     this.price = price;
     this.elementList = elementList;
+    this.movementList = movementList;
   }
 
 }

@@ -32,7 +32,6 @@ export class ProductCategoryService {
     @InjectRepository(ProductCategory, 'productsConn')
     private readonly productCategoryRepository: Repository<ProductCategory>,
 
-    private readonly companyService: CompanyService,
     private readonly replicationService: DataReplicationService
     
   ){

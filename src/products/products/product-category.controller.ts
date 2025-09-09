@@ -7,7 +7,7 @@ import { ProductCategoryDto } from './dto';
 import { ProductCategoryService } from './product-category.service';
 import { AlreadyExistException, IsBeingUsedException } from '../../common/exceptions/common.exception';
 
-@Controller('product-types')
+@Controller('product-categories')
 export class ProductCategoryController {
 
   private readonly logger = new Logger(ProductCategoryController.name);
