@@ -8,9 +8,17 @@ import { MessageDto } from '../dto/message.dto';
 import { ProcessEnum } from '../enums';
 import { JsonBasic } from '../interfaces/json-basic.interface';
 
-import { CompanyDto } from 'src/products/dto';
-import { CompanyService } from 'src/products';
+import { CompanyDto } from 'src/products/companies/dto/company.dto';
+import { CompanyService } from 'src/products/companies/company.service';
 
+import { UserDto } from 'src/products/users/dto/user.dto';
+import { UserService } from 'src/products/users/user.service';
+
+import { MovementDto } from 'src/products/products/dto/movement.dto';
+import { MovementService } from 'src/products/products/movement.service';
+import { ProductDto, ProductUnitDto } from 'src/products/products/dto';
+import { ProductService } from 'src/products/products';
+import { ProductUnitService } from 'src/products/products/product-unit.service';
 
 @Injectable()
 export class DataReceptionWorkerService implements OnModuleInit {
@@ -21,21 +29,24 @@ export class DataReceptionWorkerService implements OnModuleInit {
   private readonly redisPort: number = 0;
   private readonly redisPassword: string = "";
   private readonly redisFamily: number = 0;
-  private readonly redisJobQueueAdminProducts: string = "";
+  private readonly redisJobQueueProducts: string = "";
   
-  private workerAdminProducts: Worker;
+  private workerProduct: Worker;
   
   constructor(
     private readonly configService: ConfigService,
     private readonly companyService: CompanyService,
-    // private readonly userService: UserService
+    private readonly userService: UserService,
+    private readonly productService: ProductService,
+    private readonly movementService: MovementService,
+    private readonly productUnitService: ProductUnitService
   ) {
     // * Retrieve the Redis configuration values from ConfigService
     this.redisHost = this.configService.get('redisHost');
     this.redisPort = this.configService.get('redisPort');
     this.redisPassword = this.configService.get('redisPassword');
     this.redisFamily = this.configService.get('redisFamily');
-    this.redisJobQueueAdminProducts = this.configService.get('redisJobQueueAdminProducts');
+    this.redisJobQueueProducts = this.configService.get('redisJobQueueProducts');
   }
 
   // * Implementing OnModuleInit to initialize the worker when the module is loaded
@@ -51,14 +62,14 @@ export class DataReceptionWorkerService implements OnModuleInit {
     });
 
     // * Create a BullMQ Worker to listen to the 'jobQueue' queue
-    this.workerAdminProducts = new Worker(this.redisJobQueueAdminProducts, async job => {
+    this.workerProduct = new Worker(this.redisJobQueueProducts, async job => {
       const start = performance.now();
-      this.logger.log(`workerAdminProducts: starting process... jobId=${job.id}, data: ${JSON.stringify(job.data)}`);
+      this.logger.log(`workerProduct: starting process... jobId=${job.id}, data: ${JSON.stringify(job.data)}`);
 
       return this.processJob(job.data)
       .then( (response: string) => {
         const end = performance.now();
-        this.logger.log(`workerAdminProducts: executed, runtime=${(end - start) / 1000} seconds, jobId=${job.id} response=${response}`);
+        this.logger.log(`workerProduct: executed, runtime=${(end - start) / 1000} seconds, jobId=${job.id} response=${response}`);
         return true;
         
       })
@@ -80,24 +91,52 @@ export class DataReceptionWorkerService implements OnModuleInit {
     switch (messageDto.process) {
 
       case ProcessEnum.COMPANY_UPDATE: {
-        const dto: CompanyDto = JSON.parse(messageDto.jsonData);
-        return this.companyService.update(dto)
+        const dtoList: CompanyDto[] = JSON.parse(messageDto.jsonData);
+        return this.companyService.updateBatch(dtoList)
         .then( () => 'update company executed' )
       }
       case ProcessEnum.COMPANY_DELETE: {
-        const dto: JsonBasic = JSON.parse(messageDto.jsonData);
-        return this.companyService.remove(dto.id)
+        const dtoList: JsonBasic[] = JSON.parse(messageDto.jsonData);
+        const idList = dtoList.map(value => value.id);
+        return this.companyService.removeBatch(idList)
         .then( () => 'delete company executed' )
       }
-      // case ProcessEnum.USER_UPDATE: {
-      //   const dto: UserDto = JSON.parse(messageDto.jsonData);
-      //   return this.userService.update(dto)
-      //   .then( () => 'update user executed' )
+      case ProcessEnum.USER_UPDATE: {
+        const dtoList: UserDto[] = JSON.parse(messageDto.jsonData);
+        return this.userService.updateBatch(dtoList)
+        .then( () => 'update user executed' )
+      }
+      case ProcessEnum.USER_DELETE: {
+        const dtoList: JsonBasic[] = JSON.parse(messageDto.jsonData);
+        const idList = dtoList.map(value => value.id);
+        return this.userService.removeBatch(idList)
+        .then( () => 'delete user executed' )
+      }
+      // case ProcessEnum.PRODUCT_UPDATE: {
+      //   const dtoList: ProductDto[] = JSON.parse(messageDto.jsonData);
+      //   return this.productService.updateBatch(dtoList)
+      //   .then( () => 'update product executed' )
       // }
-      // case ProcessEnum.USER_DELETE: {
-      //   const dto: JsonBasic = JSON.parse(messageDto.jsonData);
-      //   return this.userService.remove(dto.id)
-      //   .then( () => 'delete user executed' )
+      case ProcessEnum.MOVEMENT_UPDATE: {
+        const dtoList: MovementDto[] = JSON.parse(messageDto.jsonData);
+        return this.movementService.bulkUpdate(dtoList)
+        .then( () => 'update movement executed' )
+      }
+      case ProcessEnum.MOVEMENT_DELETE: {
+        const dto: JsonBasic = JSON.parse(messageDto.jsonData);
+        return this.movementService.bulkRemoveByRelatedId(dto.id)
+        .then( () => 'delete movement executed' )
+      }
+      // case ProcessEnum.PRODUCT_UNIT_UPDATE: {
+      //   const dtoList: ProductUnitDto[] = JSON.parse(messageDto.jsonData);
+      //   return this.productUnitService.updateBatch(dtoList)
+      //   .then( () => 'update product unit executed' )
+      // }
+      // case ProcessEnum.PRODUCT_UNIT_DELETE: {
+      //   const dtoList: JsonBasic[] = JSON.parse(messageDto.jsonData);
+      //   const idList = dtoList.map(value => value.id);
+      //   return this.productUnitService.removeBatch(idList)
+      //   .then( () => 'delete product unit executed' )
       // }
       default: {
         this.logger.error(`process not implemented, process=${messageDto.process}`);

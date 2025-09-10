@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Queue } from 'bullmq';
+import { Job, Queue } from 'bullmq';
 import { MessageDto } from '../dto/message.dto';
 import { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';  // Import Redis from ioredis
@@ -13,9 +13,11 @@ export class DataReplicationRedisProducerService {
   private readonly redisPort: number = 0;
   private readonly redisPassword: string = "";
   private readonly redisFamily: number = 0;
-  private readonly redisJobQueueProductsSales: string = "";
+  private readonly redisJobQueuePurchases: string = "";
+  private readonly redisJobQueueSales: string = "";
 
-  private queue: Queue;
+  private queuePurchases: Queue;
+  private queueSales: Queue;
 
   constructor(
     private readonly configService: ConfigService
@@ -25,8 +27,8 @@ export class DataReplicationRedisProducerService {
     this.redisPort = this.configService.get('redisPort');
     this.redisPassword = this.configService.get('redisPassword');
     this.redisFamily = this.configService.get('redisFamily');
-    this.redisJobQueueProductsSales = this.configService.get('redisJobQueueProductsSales');
-    
+    this.redisJobQueuePurchases = this.configService.get('redisJobQueuePurchases');
+    this.redisJobQueueSales = this.configService.get('redisJobQueueSales');
 
     // * Create the Redis client using ioredis
     const redisClient = new Redis({
@@ -37,18 +39,46 @@ export class DataReplicationRedisProducerService {
     });
 
     // * Configure the BullMQ queue with the redisClient
-    this.queue = new Queue(this.redisJobQueueProductsSales, {
+    this.queuePurchases = new Queue(this.redisJobQueuePurchases, {
+      connection: redisClient,
+    });
+
+    this.queueSales = new Queue(this.redisJobQueueSales, {
       connection: redisClient,
     });
   }
 
   // * Method to send a message to the queue
-  sendMessage(messageDto: MessageDto): Promise<string> {
-    return this.queue.add('job', messageDto)
-    .then((job) => `job generated, jobId=${job.id}`)
+  async sendMessageToQueues(messageDto: MessageDto): Promise<string> {
+    
+    // * generate promises
+    const promiseList: Promise<string>[] = [];
+    promiseList.push(this.sendMessage(this.queuePurchases, messageDto));
+    promiseList.push(this.sendMessage(this.queueSales, messageDto));
+
+    // * exec promises    
+    const promiseResultList = await Promise.allSettled(promiseList)
+    
+    // * process result
+    let result: string = "";
+    promiseResultList.forEach( (promiseResult, index) => {
+      if (promiseResult.status === 'fulfilled') 
+        result += `${index} job success ${promiseResult.value}|`;
+      else result += `${index} job failed: ${promiseResult.reason}|`;
+    });
+    
+    return result;
+  }
+
+  private sendMessage(queue: Queue, messageDto: MessageDto) {
+
+    return queue.add('job', messageDto)
+    .then((job: Job) => `job generated, id=${job.id}`)
     .catch((error) => {
       this.logger.error(`sendMessage: error=${JSON.stringify(error)}`);
-      throw new Error(`Error sending message to REDIS: ${error.message}`);
+      throw error;
     });
+
   }
+
 }
