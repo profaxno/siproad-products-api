@@ -573,6 +573,7 @@ export class ProductService {
       query
       .leftJoinAndSelect('p.productElement', 'pe')
       .leftJoinAndSelect('pe.element', 'e')
+      .leftJoinAndSelect('e.productUnit', 'epu')
       .leftJoinAndSelect('e.company', 'c2')
     }
 
@@ -772,7 +773,7 @@ export class ProductService {
   private generateProductWithElementList(product: Product, productElementList: ProductElement[] = [], level: number): ProductDto {
 
     if(level == 2) {
-      const productDto = new ProductDto(product.company.id, product.name, product.cost, product.type, product.enable4Sale, product.id, product.productCategory?.id, product.productUnit?.id, product.code, product.description, product.unit, product.price, []);
+      const productDto = new ProductDto(product.company.id, product.name, product.cost, product.type, product.enable4Sale, product.id, product.productCategory?.id, product.productUnit?.id, product.code, product.description, product.productUnit?.name, product.price, []);
       return productDto;
     }
 
@@ -786,7 +787,7 @@ export class ProductService {
     }
 
     // * generate product dto
-    const productDto = new ProductDto(product.company.id, product.name, product.cost, product.type, product.enable4Sale, product.id, product.productCategory?.id, product.productUnit?.id, product.code, product.description, product.unit, product.price, productElementDtoList);
+    const productDto = new ProductDto(product.company.id, product.name, product.cost, product.type, product.enable4Sale, product.id, product.productCategory?.id, product.productUnit?.id, product.code, product.description, product.productUnit?.name, product.price, productElementDtoList);
     return productDto;
   }
 
@@ -814,7 +815,7 @@ export class ProductService {
 
   private generateProductWithMovementList(product: Product): ProductDto {
     const movementDtoList = product.movement.map(value => new MovementDto(value.type, value.reason, value.qty, value.product?.id, value.user?.id, value.id, value.relatedId))
-    const productDto = new ProductDto(product.company.id, product.name, product.cost, product.type, product.enable4Sale, product.id, product.productCategory?.id, product.productUnit?.id, product.code, product.description, product.unit, product.price, [], movementDtoList);
+    const productDto = new ProductDto(product.company.id, product.name, product.cost, product.type, product.enable4Sale, product.id, product.productCategory?.id, product.productUnit?.id, product.code, product.description, product.productUnit?.name, product.price, [], movementDtoList);
     return productDto;
   }
 }
