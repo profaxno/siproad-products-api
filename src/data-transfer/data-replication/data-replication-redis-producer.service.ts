@@ -39,13 +39,13 @@ export class DataReplicationRedisProducerService {
     });
 
     // * Configure the BullMQ queue with the redisClient
-    this.queuePurchases = new Queue(this.redisJobQueuePurchases, {
-      connection: redisClient,
-    });
+    // this.queuePurchases = new Queue(this.redisJobQueuePurchases, {
+    //   connection: redisClient,
+    // });
 
-    this.queueSales = new Queue(this.redisJobQueueSales, {
-      connection: redisClient,
-    });
+    // this.queueSales = new Queue(this.redisJobQueueSales, {
+    //   connection: redisClient,
+    // });
   }
 
   // * Method to send a message to the queue
