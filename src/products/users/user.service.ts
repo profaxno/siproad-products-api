@@ -80,9 +80,8 @@ export class UserService {
       
       return this.prepareEntity(entity, dto) // * prepare
       .then( (entity: User) => this.save(entity) ) // * update
-      .then( (entity: User) => {
-        const dto = new UserDto(entity.company.id, entity.name, entity.email, entity.id, entity.status);
-        
+      .then( (entity: User) => new UserDto(entity.company.id, entity.name, entity.email, entity.id, entity.status) )
+      .then( (dto: UserDto) => {  
         const end = performance.now();
         this.logger.log(`update: executed, runtime=${(end - start) / 1000} seconds`);
         return dto;
@@ -147,7 +146,7 @@ export class UserService {
     const start = performance.now();
 
     return this.userRepository.findOne({
-      where: { name: dto.name },
+      where: { name: dto.name, company: { id: dto.companyId } },
     })
     .then( (entity: User) => {
 
@@ -162,9 +161,8 @@ export class UserService {
     })
     .then( (entity: User) => this.prepareEntity(entity, dto) )// * prepare
     .then( (entity: User) => this.save(entity) ) // * update
-    .then( (entity: User) => {
-      const dto = new UserDto(entity.company.id, entity.name, entity.email, entity.id, entity.status);
-      
+    .then( (entity: User) => new UserDto(entity.company.id, entity.name, entity.email, entity.id, entity.status) )
+    .then( (dto: UserDto) => {
       const end = performance.now();
       this.logger.log(`create: executed, runtime=${(end - start) / 1000} seconds`);
       return dto;

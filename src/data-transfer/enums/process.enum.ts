@@ -3,12 +3,9 @@ export enum ProcessEnum {
     COMPANY_DELETE      = 'companyDelete',
     USER_UPDATE         = 'userUpdate',
     USER_DELETE         = 'userDelete',
-    PRODUCT_UPDATE      = 'productUpdate',
-    PRODUCT_DELETE      = 'productDelete',
-    PRODUCT_CATEGORY_UPDATE = 'productCategoryUpdate',
-    PRODUCT_CATEGORY_DELETE = 'productCategoryDelete',
+    PRODUCT_UNIT_UPDATE = 'productUnitUpdate',
+    PRODUCT_UNIT_DELETE = 'productUnitDelete',
     MOVEMENT_UPDATE     = 'movementUpdate',
     MOVEMENT_DELETE     = 'movementDelete',
-    PRODUCT_UNIT_UPDATE = 'productUnitUpdate',
-    PRODUCT_UNIT_DELETE = 'productUnitDelete'
+    
 }

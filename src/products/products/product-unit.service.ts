@@ -75,9 +75,8 @@ export class ProductUnitService {
       
       return this.prepareEntity(entity, dto) // * prepare
       .then( (entity: ProductUnit) => this.save(entity) ) // * update
-      .then( (entity: ProductUnit) => {
-        const dto = new ProductUnitDto(entity.company.id, entity.name, entity.id);
-  
+      .then( (entity: ProductUnit) => new ProductUnitDto(entity.company.id, entity.name, entity.id) )
+      .then( (dto: ProductUnitDto) => {
         const end = performance.now();
         this.logger.log(`update: executed, runtime=${(end - start) / 1000} seconds`);
         return dto;
@@ -100,7 +99,7 @@ export class ProductUnitService {
 
     // * create
     return this.ProductUnitRepository.findOne({
-      where: { name: dto.name },
+      where: { name: dto.name, company: { id: dto.companyId } },
     })
     .then( (entity: ProductUnit) => {
 
@@ -115,9 +114,8 @@ export class ProductUnitService {
     })
     .then( (entity: ProductUnit) => this.prepareEntity(entity, dto) )// * prepare
     .then( (entity: ProductUnit) => this.save(entity) ) // * update
-    .then( (entity: ProductUnit) => {
-      const dto = new ProductUnitDto(entity.company.id, entity.name, entity.id);
-
+    .then( (entity: ProductUnit) => new ProductUnitDto(entity.company.id, entity.name, entity.id) )
+    .then( (dto: ProductUnitDto) => {
       const end = performance.now();
       this.logger.log(`create: executed, runtime=${(end - start) / 1000} seconds`);
       return dto;

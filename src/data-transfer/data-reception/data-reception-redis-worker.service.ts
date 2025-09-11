@@ -127,17 +127,17 @@ export class DataReceptionWorkerService implements OnModuleInit {
         return this.movementService.bulkRemoveByRelatedId(dto.id)
         .then( () => 'delete movement executed' )
       }
-      // case ProcessEnum.PRODUCT_UNIT_UPDATE: {
-      //   const dtoList: ProductUnitDto[] = JSON.parse(messageDto.jsonData);
-      //   return this.productUnitService.updateBatch(dtoList)
-      //   .then( () => 'update product unit executed' )
-      // }
-      // case ProcessEnum.PRODUCT_UNIT_DELETE: {
-      //   const dtoList: JsonBasic[] = JSON.parse(messageDto.jsonData);
-      //   const idList = dtoList.map(value => value.id);
-      //   return this.productUnitService.removeBatch(idList)
-      //   .then( () => 'delete product unit executed' )
-      // }
+      case ProcessEnum.PRODUCT_UNIT_UPDATE: {
+        const dtoList: ProductUnitDto[] = JSON.parse(messageDto.jsonData);
+        return this.productUnitService.updateBatch(dtoList)
+        .then( () => 'update product unit executed' )
+      }
+      case ProcessEnum.PRODUCT_UNIT_DELETE: {
+        const dtoList: JsonBasic[] = JSON.parse(messageDto.jsonData);
+        const idList = dtoList.map(value => value.id);
+        return this.productUnitService.removeBatch(idList)
+        .then( () => 'delete product unit executed' )
+      }
       default: {
         this.logger.error(`process not implemented, process=${messageDto.process}`);
         return Promise.resolve('process not implemented');

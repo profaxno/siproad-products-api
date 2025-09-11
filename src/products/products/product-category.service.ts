@@ -12,11 +12,6 @@ import { ProductCategory } from './entities';
 import { Company } from '../companies/entities/company.entity';
 import { CompanyService } from '../companies/company.service';
 
-import { ProcessEnum, SourceEnum } from 'src/data-transfer/enums';
-import { MessageDto } from 'src/data-transfer/dto/message.dto';
-import { JsonBasic } from 'src/data-transfer/interfaces/json-basic.interface';
-import { DataReplicationService } from 'src/data-transfer/data-replication/data-replication.service';
-
 import { AlreadyExistException, IsBeingUsedException } from '../../common/exceptions/common.exception';
 
 @Injectable()
@@ -31,8 +26,6 @@ export class ProductCategoryService {
 
     @InjectRepository(ProductCategory, 'productsConn')
     private readonly productCategoryRepository: Repository<ProductCategory>,
-
-    private readonly replicationService: DataReplicationService
     
   ){
     this.dbDefaultLimit = this.ConfigService.get("dbDefaultLimit");
@@ -84,13 +77,8 @@ export class ProductCategoryService {
       
       return this.prepareEntity(entity, dto) // * prepare
       .then( (entity: ProductCategory) => this.save(entity) ) // * update
-      .then( (entity: ProductCategory) => {
-        const dto = new ProductCategoryDto(entity.company.id, entity.name, entity.id); // * map to dto
-        
-        // * replication data
-        const messageDto = new MessageDto(SourceEnum.API_PRODUCTS, ProcessEnum.PRODUCT_CATEGORY_UPDATE, JSON.stringify(dto));
-        this.replicationService.sendMessages([messageDto]);
-
+      .then( (entity: ProductCategory) => new ProductCategoryDto(entity.company.id, entity.name, entity.id) ) // * map to dto
+      .then( (dto: ProductCategoryDto) => {
         const end = performance.now();
         this.logger.log(`update: executed, runtime=${(end - start) / 1000} seconds`);
         return dto;
@@ -105,48 +93,6 @@ export class ProductCategoryService {
       throw error;
     })
 
-    // this.logger.warn(`update: starting process... dto=${JSON.stringify(dto)}`);
-    // const start = performance.now();
-
-    // // * find productType
-    // const inputDto: SearchInputDto = new SearchInputDto(dto.id);
-      
-    // return this.findByValue({}, inputDto)
-    // .then( (entityList: ProductCategory[]) => {
-
-    //   // * validate
-    //   if(entityList.length == 0){
-    //     const msg = `productType not found, id=${dto.id}`;
-    //     this.logger.warn(`update: not executed (${msg})`);
-    //     throw new NotFoundException(msg);
-    //   }
-
-    //   // * update
-    //   const entity = entityList[0];
-              
-    //   return this.prepareEntity(entity, dto) // * prepare
-    //   .then( (entity: ProductCategory) => this.save(entity) ) // * update
-    //   .then( (entity: ProductCategory) => {
-    //     dto = new ProductCategoryDto(entity.company.id, entity.name, entity.id); // * map to dto
-
-    //     // * replication data
-    //     const messageDto = new MessageDto(SourceEnum.API_PRODUCTS, ProcessEnum.PRODUCT_TYPE_UPDATE, JSON.stringify(dto));
-    //     this.replicationService.sendMessages([messageDto]);
-
-    //     const end = performance.now();
-    //     this.logger.log(`update: executed, runtime=${(end - start) / 1000} seconds`);
-    //     return dto;
-    //   })
-      
-    // })
-    // .catch(error => {
-    //   if(error instanceof NotFoundException)
-    //     throw error;
-
-    //   this.logger.error(`update: error`, error);
-    //   throw error;
-    // })
-
   }
 
   create(dto: ProductCategoryDto): Promise<ProductCategoryDto> {
@@ -154,7 +100,7 @@ export class ProductCategoryService {
     const start = performance.now();
 
     return this.productCategoryRepository.findOne({
-      where: { name: dto.name },
+      where: { name: dto.name, company: { id: dto.companyId } },
     })
     .then( (entity: ProductCategory) => {
 
@@ -169,13 +115,8 @@ export class ProductCategoryService {
     })
     .then( (entity: ProductCategory) => this.prepareEntity(entity, dto) )// * prepare
     .then( (entity: ProductCategory) => this.save(entity) ) // * update
-    .then( (entity: ProductCategory) => {
-      const dto = new ProductCategoryDto(entity.company.id, entity.name, entity.id); // * map to dto 
-      
-      // * replication data
-      const messageDto = new MessageDto(SourceEnum.API_PRODUCTS, ProcessEnum.PRODUCT_CATEGORY_UPDATE, JSON.stringify(dto));
-      this.replicationService.sendMessages([messageDto]);
-
+    .then( (entity: ProductCategory) => new ProductCategoryDto(entity.company.id, entity.name, entity.id) ) // * map to dto
+    .then( (dto: ProductCategoryDto) => {
       const end = performance.now();
       this.logger.log(`create: executed, runtime=${(end - start) / 1000} seconds`);
       return dto;
@@ -251,12 +192,6 @@ export class ProductCategoryService {
     })
     .then( (entity: ProductCategory) => this.save(entity) )
     .then( (entity: ProductCategory) => {
-
-      // * replication data
-      const jsonBasic: JsonBasic = { id: entity.id }
-      const messageDto = new MessageDto(SourceEnum.API_PRODUCTS, ProcessEnum.PRODUCT_CATEGORY_DELETE, JSON.stringify(jsonBasic));
-      this.replicationService.sendMessages([messageDto]);
-
       const end = performance.now();
       this.logger.log(`remove: OK, runtime=${(end - start) / 1000} seconds`);
       return 'deleted';
@@ -321,38 +256,38 @@ export class ProductCategoryService {
 
   }
 
-  synchronize(companyId: string, paginationDto: SearchPaginationDto): Promise<string> {
-    this.logger.warn(`synchronize: starting process... companyId=${companyId}, paginationDto=${JSON.stringify(paginationDto)}`);
+  // synchronize(companyId: string, paginationDto: SearchPaginationDto): Promise<string> {
+  //   this.logger.warn(`synchronize: starting process... companyId=${companyId}, paginationDto=${JSON.stringify(paginationDto)}`);
 
-    return this.findAll(paginationDto, companyId)
-    .then( (entityList: ProductCategory[]) => {
+  //   return this.findAll(paginationDto, companyId)
+  //   .then( (entityList: ProductCategory[]) => {
       
-      if(entityList.length == 0){
-        const msg = 'executed';
-        this.logger.log(`synchronize: ${msg}`);
-        return msg;
-      }
+  //     if(entityList.length == 0){
+  //       const msg = 'executed';
+  //       this.logger.log(`synchronize: ${msg}`);
+  //       return msg;
+  //     }
 
-      const messageDtoList: MessageDto[] = entityList.map( value => {
-        const process = value.active ? ProcessEnum.PRODUCT_CATEGORY_UPDATE : ProcessEnum.PRODUCT_CATEGORY_DELETE;
-        const dto = new ProductCategoryDto(value.company.id, value.name, value.id);
-        return new MessageDto(SourceEnum.API_PRODUCTS, process, JSON.stringify(dto));
-      });
+  //     const messageDtoList: MessageDto[] = entityList.map( value => {
+  //       const process = value.active ? ProcessEnum.PRODUCT_CATEGORY_UPDATE : ProcessEnum.PRODUCT_CATEGORY_DELETE;
+  //       const dto = new ProductCategoryDto(value.company.id, value.name, value.id);
+  //       return new MessageDto(SourceEnum.API_PRODUCTS, process, JSON.stringify(dto));
+  //     });
             
-      return this.replicationService.sendMessages(messageDtoList)
-      .then( () => {
-        paginationDto.page++;
-        return this.synchronize(companyId, paginationDto);
-      })
+  //     return this.replicationService.sendMessages(messageDtoList)
+  //     .then( () => {
+  //       paginationDto.page++;
+  //       return this.synchronize(companyId, paginationDto);
+  //     })
       
-    })
-    .catch( error => {
-      const msg = `not executed (unexpected error)`;
-      this.logger.error(`synchronize: ${msg}, paginationDto=${JSON.stringify(paginationDto)}`, error);
-      return msg;
-    })
+  //   })
+  //   .catch( error => {
+  //     const msg = `not executed (unexpected error)`;
+  //     this.logger.error(`synchronize: ${msg}, paginationDto=${JSON.stringify(paginationDto)}`, error);
+  //     return msg;
+  //   })
 
-  }
+  // }
 
   private prepareEntity(entity: ProductCategory, dto: ProductCategoryDto): Promise<ProductCategory> {
     

@@ -11,11 +11,6 @@ import { ProductTypeEnum } from './enums';
 
 import { Company } from '../companies/entities/company.entity';
 
-import { MessageDto } from 'src/data-transfer/dto/message.dto';
-import { JsonBasic } from 'src/data-transfer/interfaces/json-basic.interface';
-import { ProcessEnum, SourceEnum } from 'src/data-transfer/enums';
-import { DataReplicationService } from 'src/data-transfer/data-replication/data-replication.service';
-
 import { AlreadyExistException, IsBeingUsedException } from '../../common/exceptions/common.exception';
 import { ProductSearchInputQueryDto } from './dto/product-search-input-query.dto';
 
@@ -122,7 +117,7 @@ export class ProductService {
     const start = performance.now();
 
     return this.productRepository.findOne({
-      where: { name: dto.name },
+      where: { name: dto.name, company: { id: dto.companyId } },
     })
     .then( (entity: Product) => {
 

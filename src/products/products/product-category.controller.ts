@@ -85,31 +85,31 @@ export class ProductCategoryController {
     })
   }
 
-  @Post('/synchronize/:companyId')
-  @HttpCode(HttpStatus.OK)
-  synchronize(
-    @Param('companyId', ParseUUIDPipe) companyId: string,
-    @Query() paginationDto: SearchPaginationDto
-  ): Promise<PfxHttpResponseDto> {
+  // @Post('/synchronize/:companyId')
+  // @HttpCode(HttpStatus.OK)
+  // synchronize(
+  //   @Param('companyId', ParseUUIDPipe) companyId: string,
+  //   @Query() paginationDto: SearchPaginationDto
+  // ): Promise<PfxHttpResponseDto> {
 
-    this.logger.log(`>>> synchronize: companyId=${companyId}, paginationDto=${JSON.stringify(paginationDto)}`);
-    const start = performance.now();
+  //   this.logger.log(`>>> synchronize: companyId=${companyId}, paginationDto=${JSON.stringify(paginationDto)}`);
+  //   const start = performance.now();
 
-    paginationDto.page=1;
+  //   paginationDto.page=1;
 
-    return this.productCategoryService.synchronize(companyId, paginationDto)
-    .then( (msg: string) => {
-      const response = new PfxHttpResponseDto(HttpStatus.OK, msg);
-      const end = performance.now();
-      this.logger.log(`<<< synchronize: executed, runtime=${(end - start) / 1000} seconds, response=${JSON.stringify(response)}`);
-      return response;
-    })
-    .catch( (error: Error) => {
-      this.logger.error(error.stack);
-      return new PfxHttpResponseDto(HttpStatus.INTERNAL_SERVER_ERROR, error.message);
-    })
+  //   return this.productCategoryService.synchronize(companyId, paginationDto)
+  //   .then( (msg: string) => {
+  //     const response = new PfxHttpResponseDto(HttpStatus.OK, msg);
+  //     const end = performance.now();
+  //     this.logger.log(`<<< synchronize: executed, runtime=${(end - start) / 1000} seconds, response=${JSON.stringify(response)}`);
+  //     return response;
+  //   })
+  //   .catch( (error: Error) => {
+  //     this.logger.error(error.stack);
+  //     return new PfxHttpResponseDto(HttpStatus.INTERNAL_SERVER_ERROR, error.message);
+  //   })
 
-  }
+  // }
   
   // @Get('/find/:companyId')
   // find(
