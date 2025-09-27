@@ -51,7 +51,7 @@ export class MovementService {
 
     return this.save(entity) // * update
     .then( (entity: Movement) => {
-      const dto = new MovementDto(entity.type, entity.reason, entity.qty, entity.product.id, entity.user.id, entity.id, entity.relatedId);
+      const dto = new MovementDto(entity.type, entity.reason, entity.qty, entity.product.id, entity.user.id, entity.id, entity.relatedId, entity.relatedCode);
 
       const end = performance.now();
       this.logger.log(`create: created OK, runtime=${(end - start) / 1000} seconds`);
@@ -191,7 +191,7 @@ export class MovementService {
     const start = performance.now();
 
     return this.searchEntitiesByValues(companyId, paginationDto, inputDto)
-    .then( (entityList: Movement[]) => entityList.map( (entity) => new MovementDto(entity.type, entity.reason, entity.qty, entity.product?.id, entity.user?.id, entity.id, entity.relatedId) ) )
+    .then( (entityList: Movement[]) => entityList.map( (entity) => new MovementDto(entity.type, entity.reason, entity.qty, entity.product?.id, entity.user?.id, entity.id, entity.relatedId, entity.relatedCode) ) )
     .then( (dtoList: MovementDto[]) => {
       
       if(dtoList.length == 0){
@@ -259,6 +259,7 @@ export class MovementService {
       // * prepare entity
       entity.id         = dto.id ? dto.id : undefined;
       entity.relatedId  = dto.relatedId ? dto.relatedId : undefined;
+      entity.relatedCode= dto.relatedCode ? dto.relatedCode : undefined;
       entity.type       = dto.type;
       entity.reason     = dto.reason;
       entity.qty        = dto.qty;

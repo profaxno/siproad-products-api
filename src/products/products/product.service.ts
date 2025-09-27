@@ -809,7 +809,7 @@ export class ProductService {
   }
 
   private generateProductWithMovementList(product: Product): ProductDto {
-    const movementDtoList = product.movement.map(value => new MovementDto(value.type, value.reason, value.qty, value.product?.id, value.user?.id, value.id, value.relatedId))
+    const movementDtoList = product.movement.map(value => new MovementDto(value.type, value.reason, value.qty, value.product?.id, value.user?.id, value.id, value.relatedId, value.relatedCode))
     const productDto = new ProductDto(product.company.id, product.name, product.cost, product.type, product.enable4Sale, product.id, product.productCategory?.id, product.productUnit?.id, product.code, product.description, product.productUnit?.name, product.price, [], movementDtoList);
     return productDto;
   }
