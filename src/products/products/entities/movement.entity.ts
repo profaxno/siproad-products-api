@@ -11,6 +11,9 @@ export class Movement {
   @Column('varchar', { length: 100 })
   relatedId: string;
   
+  @Column({ type: 'int', unsigned: true })
+  relatedCode: number;
+
   @Column('tinyint', { default: 1, unsigned: true })
   type: number;
 
